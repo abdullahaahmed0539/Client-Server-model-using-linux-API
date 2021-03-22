@@ -8,22 +8,33 @@
 
 using namespace std;
 
-void errorHandler(char str []){
-    for( int index = 0 ; index< strlen(str)-1; index++ ){   
+bool errorHandler(char str []){
+    // for (size_t i = 0; i < strlen(str); i++)
+    // {
+    //     cout<<str[i];
+    // }
+
+    // cout<<endl;
+    
+    for( int index = 0 ; index< strlen(str); index++ ){   
         if( (str[index] >= '0' && str[index] <= '9' )  || str[index] == ' ' || str[index] == '\n' || str[index] == ';' || str[index]== '-' /*for negative values*/ || str[index]== '.' /*for decimal values*/) {  
            continue;
         
         } else{ 
             write(STDOUT_FILENO,"You have entered a non-numeric value. Please enter only numeric values.\n",71);
-            exit(0);
+            return false;
         }
     }
+
+    return true;
 }
 
 char * tokenizer(char str []){
     char *token = strtok(str, " ");  
     return token;
 }
+
+
 
 int main (){
     int buff_size = 100;
@@ -67,6 +78,14 @@ int main (){
         //Sending command to server
         if(write(fd[1], command, ret) < 0)
             perror("Error while displaying message in line 52: " + errno);
+
+        sleep(1);
+        ret = read (fd[0], response, buff_size);
+        if (ret < 0)
+            perror(""+errno);
+
+        if(write(STDOUT_FILENO, response, ret) < 0)
+            perror("Error while displaying message in line 52: " + errno);
     }
     else   //Server process
     {   
@@ -84,8 +103,69 @@ int main (){
         
         if( (token == "add") || (token == "sub") || (token == "mul") || (token == "div") )
         {   
+           char buff [buff_size]; 
+           tokens = strtok(NULL," ");
+           bool allowed = false;
+           double answer = 0;
 
-            //errorHandler(recieved_command);
+           while(tokens!=NULL)
+           {
+                allowed = errorHandler(tokens);
+              //  cout<<allowed;
+                if(!allowed){
+                    break;
+                }
+               
+                if ( *tokens == ';')
+                {
+                    int n = sprintf(buff, "ANSWER: %.2f\n", answer);
+                    int w = write(fd [1],buff,n);
+                    if(w < 0)
+                        perror ("" + errno);
+                    tokens = strtok(NULL, " ");
+                    answer = 0;
+                } 
+                else if (*tokens == '\n')
+                {
+                    continue;
+                }
+                else 
+                {
+                    if (token == "add" )
+                    {
+                        answer += atof(tokens); 
+                    }
+                    else if (token =="sub")
+                    {
+                        answer -= atof(tokens);
+                    }
+                    else if (token == "mul")
+                    {
+                        if (answer == 0){
+                            answer = 1;
+                        }
+                        answer = answer * atof(tokens);
+                    }else {
+                        if (*tokens != '0')
+                        {
+                            if (answer == 0){
+                                answer = atof(tokens);
+                            }else{
+                                answer = answer / atof(tokens);
+                            }       
+                        }
+                        else
+                        {
+                            cout<<"can divide by 0"<<endl;
+                            break;
+                        } 
+                        
+                    }
+                    
+                    tokens = strtok(NULL, " ");
+                } 
+
+           }
         }
         else if (token == "run")
         {   
