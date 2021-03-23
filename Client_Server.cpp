@@ -30,7 +30,7 @@ bool errorHandler(char str []){
 }
 
 char * tokenizer(char str []){
-    char *token = strtok(str, " ");  
+    char *token = strtok(str, " \n");  
     return token;
 }
 
@@ -56,8 +56,10 @@ int main (){
     }
     else if (id == 0)  //Client process
     {  
+        while(true){
         //variable declarations
-        char command[buff_size], response[buff_size];
+        char command[buff_size] = {} ;
+        char response[buff_size] = {};
         int ret;
         char output_message_for_commands [] = "You have the following commands: add, sub, mul, div, run, exit.\n" ;
         char output_message_for_input [] = "Enter your command: ";
@@ -82,17 +84,26 @@ int main (){
         sleep(1);
         ret = read (fd[0], response, buff_size);
         if (ret < 0)
-            perror(""+errno);
+            perror(""+errno); 
 
+            
         if(write(STDOUT_FILENO, response, ret) < 0)
             perror("Error while displaying message in line 52: " + errno);
+        
+       
+        
+        cout<<"\n";
+        }
+
     }
     else   //Server process
     {   
+        while(true){
         //Variable declarations
         int ret;
-        char recieved_command [buff_size];     
+        char recieved_command [buff_size] = {};     
 
+      
         //Recieving command from client
         ret = read(fd[0], recieved_command, buff_size);
         if(ret < 0)
@@ -107,6 +118,7 @@ int main (){
            tokens = strtok(NULL," ");
            bool allowed = false;
            double answer = 0;
+           bool f =false;
 
            while(tokens!=NULL)
            {
@@ -137,7 +149,13 @@ int main (){
                     }
                     else if (token =="sub")
                     {
-                        answer -= atof(tokens);
+                        if (!f){
+                            answer=atof(tokens);
+                            f= true;
+                        }else{
+                            answer -= atof(tokens);
+                        }
+                        
                     }
                     else if (token == "mul")
                     {
@@ -156,7 +174,7 @@ int main (){
                         }
                         else
                         {
-                            cout<<"can divide by 0"<<endl;
+                            cout<<"can't divide by 0"<<endl;
                             break;
                         } 
                         
@@ -166,10 +184,12 @@ int main (){
                 } 
 
            }
+           sleep(1);
         }
         else if (token == "run")
         {   
             //Pipe for child processes
+            char buff [buff_size] = {'s','u','c','c','e','s','s'};
             int fd1[2];
             if (pipe(fd1) < 0)
                 perror("Error in piping on line 19: " + errno);
@@ -181,15 +201,23 @@ int main (){
                 perror("error while forking in run: "+errno);
             }
             else if (pid > 0)
-            {
+            {   
+                
                 tokens = strtok(NULL, " \n");
+
                 if(write(fd1[1], tokens, strlen(tokens)) < 0)
                     perror("error"+ errno);
-                                                    
+
+                if(write(fd[1], buff, strlen(buff)) < 0)
+                    perror("error"+ errno);
+
+                 sleep(1);
+                continue;                
+
             }
             else 
             {
-                char App [buff_size];
+                char App [buff_size] ={};
                 char path[buff_size] = {'/','u','s','r','/','b','i','n','/'};
                 ret = read(fd1[0], App, buff_size);
                 if(ret < 0)
@@ -199,7 +227,8 @@ int main (){
                 {
                     path[9 + i] = App [i];
                 }
-    
+
+
                 if(execlp(path,path,NULL) < 0)
                     perror(""+errno);
             }
@@ -207,17 +236,18 @@ int main (){
         }
         else if (token == "exit")
         {
-
+              exit(getpid());
+              sleep(1);
         }
-        else
+        else 
         {
-            char err_message [] = "Illegal instruction Entered. Program will terminated.";
+            //sleep(3);
+            if(write(fd[1], "invalid", 7) < 0)
+                perror(""+errno);
+
+            sleep(1);
         }
-      
-    
-    
-    
-    
+        }
     }
     return 0;
 }
