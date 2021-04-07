@@ -25,6 +25,8 @@ struct list {
     bool active;
 };
 
+
+
 bool errorHandler(char str []){
     for( int index = 0 ; index< strlen(str); index++ ){   
         if( (str[index] >= '0' && str[index] <= '9' )  || str[index] == ' ' || str[index] == '\n' || str[index] == ';' || str[index]== '-' /*for negative values*/ || str[index]== '.' /*for decimal values*/) {  
@@ -79,6 +81,10 @@ int main (){
         if(write(STDOUT_FILENO, &output_message_for_commands , strlen(output_message_for_commands)) < 0)
             perror("Error while displaying message.1 ");
 
+        if (write(STDOUT_FILENO,"For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n", strlen("For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n"))< 0){
+            perror("Error while displaying message.8 "); 
+        }
+
         if(write(STDOUT_FILENO, &output_message_for_input, strlen(output_message_for_input)) < 0)
             perror("Error while displaying message.2 "); 
         //User input  
@@ -93,16 +99,26 @@ int main (){
 
         sleep(1);
 
+        char * tok = tokenizer(command);
+        string toktemp = (string) tok;
         if(command[0]=='e' && command[1]=='x' && command[2]=='i' && command[3]=='t' && command[4]=='\n'){
                 exit(getpid());
         }
-
-        ret = read (fd[0], response, buff_size);
+        
+        
+        ret = read (fd[0], response, 500);
         if (ret < 0)
             perror("Error in reading response."); 
 
+
         if(write(STDOUT_FILENO, response, ret) < 0)
             perror("Error while displaying response");
+             
+        
+       
+
+
+        
         
        
         
@@ -113,6 +129,11 @@ int main (){
     else   //Server process
     {   
         list processList [50];
+        for (size_t k = 0; k < 50; k++)
+        {
+             processList[k].pid = 0;
+        }
+        
 
         while(true){
         //Variable declarations
@@ -212,6 +233,8 @@ int main (){
             
             //Forking for exec
             int pid = fork();
+            
+           
             if(pid < 0)
             {
                 perror("error while forking in run. ");
@@ -235,8 +258,12 @@ int main (){
                         i++;
                     }
                     processList[i].pid = pid;
-                    processList[i].name = tokens;
+                    int size = strlen(tokens);
+                    char a [size];
+                    sprintf(a, "%s", tokens);
+                    processList[i].name = a;
                     time_t currentTime;    
+                    time(&currentTime);
                     processList[i].startTime = currentTime;
                     processList[i].active = true;
                     if(write(fd[1], "success", 7) < 0)
@@ -278,51 +305,78 @@ int main (){
         else if (token == "kill") //segmentation dump occurs when killing a non opened file.
         {
             tokens = strtok(NULL, " \n");
-
             int x = atoi (tokens);
+            
+            
             if (x > 0){
-                ret = kill(x,SIGTERM);
-                if (ret < 0){
-                if(write(fd[1], "process not killed",17))
-                    perror("Error while piping. ");
-                }else{
-                write(fd[1], "successfully killed",19);                 
-                }
-                int i = 0;
-                while(processList[i].pid != x){
+                    int i = 0;
+                    bool isfound;
+                    
+                    while(processList[i].pid !=0){
+                        if(processList[i].pid==x){
+                            isfound = true;
+                        }  
                         i++;
-                }
-                processList[i].active = false;
-                time_t currentTime;    
-                processList[i].endTime = currentTime;
+                    }
+                    cout << isfound<< endl;
+                    if (isfound){
+                    ret = kill(x,SIGTERM);
+                    if (ret < 0){
+                        if(write(fd[1], "process not killed as it doesnt exist.",17) < 0)
+                            perror("Error while piping. ");
+                    }else{
+                    write(fd[1], "successfully killed",19);                 
+                    }
+                    int status;
+                    int wait_chk = waitpid(x,&status,0);
+                    if(wait_chk==-1)
+                        perror("Error in waitpid");
+                    int i = 0;
+                    while(processList[i].pid != x){
+                            i++;
+                    }
+                    processList[i].active = false;
+                    time_t Time; 
+                    time(&Time);   
+                    processList[i].endTime = Time;
 
-                processList[i].elapsedTime = difftime(processList[i].endTime,processList[i].startTime);
-
-            }else{
-                int j = 0;
+                    processList[i].elapsedTime = difftime(processList[i].endTime,processList[i].startTime);
+                    }else {
+                        write(fd[1], "unsuccessful kill",19);
+                    }
+            }else if (x==0){
                 bool isfound;
-                while( processList[j].name!= tokens){
-                    j++;
-                    isfound = true;
+                int i = 0;
+                string name  = (string) tokens;
+                while(processList[i].pid!=0){
+                    if( name == processList[i].name && processList[i].active){
+                        isfound = true;
+                        break;
+                     }
+                    i++;
                 }
+               
 
-                if (isfound){
-                ret = kill(processList[j].pid, SIGTERM);
-                if (ret < 0){
-                if(write(fd[1], "process not killed",17))
-                    perror("Error while piping. ");
+
+                if(isfound){
+                    ret = kill(processList[i].pid, SIGTERM);
+                    if (ret < 0){
+                        if(write(fd[1], "process not killed",18) < 0)
+                            perror("Error while killing. ");
+                    }else{
+                        write(fd[1], "successfully killed",19);                 
+                    }
+                    processList[i].active = false;
+                    time_t currentTime;    
+                    processList[i].endTime = currentTime;
+
+                    processList[i].elapsedTime = difftime(processList[i].endTime,processList[i].startTime);
                 }else{
-                write(fd[1], "successfully killed",19);                 
+                    if(write(fd[1], "process not killed as it doesnt exist",strlen("process not killed as it doesnt exist"))< 0)
+                        perror("Error while piping 15. ");
                 }
-                processList[j].active = false;
-                time_t currentTime;    
-                processList[j].endTime = currentTime;
-
-                processList[j].elapsedTime = difftime(processList[j].endTime,processList[j].startTime);
-                }else {
-                        if(write(fd[1], "process not killed",17))
-                    perror("Error while piping. ");
-                }
+            }else {
+                write(fd[1], "failed in killing process",25);
             }
         }
         else if (token == "exit")
@@ -332,9 +386,79 @@ int main (){
         }
         else if (token == "list" || token == "listall")
         {
-              if(token == "listall"){
+                       
+              if (token == "listall"){
+                  int i = 0;
+                  char temp [500] = {};
+                  char tempall [500] = {};
+               
+                  while(processList[i].pid!= 0 ){
+                      if(!processList[i].active){
+                            tm st = *localtime(&processList[i].startTime);
+                            tm et = *localtime(&processList[i].endTime);
 
-              }else{
+                            int st_h = st.tm_hour;
+                            int st_m = st.tm_min;
+                            int st_s = st.tm_sec;
+
+                            int ed_h = et.tm_hour;
+                            int ed_m = et.tm_min;
+                            int ed_s = et.tm_sec;
+
+                            int el_h = ed_h - st_h;
+                            int el_m = ed_m - st_m;
+                            int el_s = ed_s - st_s;
+
+                            if (el_h < 0 ){
+                                el_h = -1 * el_h;
+                            }else if (el_m < 0){
+                                el_m = -1 * el_m;
+                            }else if (el_s < 0){
+                                el_s = -1 * el_s;
+                            }
+                           
+                            sprintf(temp, "pid: %d \nstarting time: %d hour %d min %d sec \n ending time: %d hour %d min %d sec \n elapsed time: %d hour %d min %d sec\n\n",
+                             processList[i].pid, st_h,st_m,st_s,ed_h,ed_m,ed_s,el_h,el_m,el_s);
+                            strcat(tempall,temp);
+                            
+                            
+                      }else{
+                          tm st = *localtime(&processList[i].startTime);
+                                                                        
+                          int st_h = st.tm_hour;
+                          int st_m = st.tm_min;
+                          int st_s = st.tm_sec;
+                           
+                          sprintf(temp, "pid: %d \nstarting time: %d hour %d min %d sec \n\n ",
+                          processList[i].pid, st_h,st_m,st_s);
+                            
+                          strcat(tempall,temp);  
+                      }
+                    
+                      i++;
+                  }
+
+                  write(fd[1],tempall,strlen(tempall));
+              }
+              else{
+                  int i = 0;
+                  char temp [500], tempall[500] = {};
+                  while(processList[i].pid!= 0){
+                      if(processList[i].active){
+                          tm st = *localtime(&processList[i].startTime);
+                                                                        
+                          int st_h = st.tm_hour;
+                          int st_m = st.tm_min;
+                          int st_s = st.tm_sec;
+                           
+                          sprintf(temp, "pid: %d  \nstarting time: %d hour %d min %d sec \n\n ",
+                          processList[i].pid, st_h,st_m,st_s);
+                            
+                          strcat(tempall,temp);  
+                      }
+                      i++;
+                  }
+                  if(strlen(tempall) <= 0){write(fd[1],"No active processes",strlen("No active processes"));}else {write(fd[1],tempall,strlen(tempall));}  
                   
               }
         }
