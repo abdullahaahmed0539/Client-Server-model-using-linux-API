@@ -302,7 +302,7 @@ int main (){
              }
             
         }
-        else if (token == "kill") //segmentation dump occurs when killing a non opened file.
+        else if (token == "kill") 
         {
             tokens = strtok(NULL, " \n");
             int x = atoi (tokens);
@@ -342,7 +342,7 @@ int main (){
 
                     processList[i].elapsedTime = difftime(processList[i].endTime,processList[i].startTime);
                     }else {
-                        write(fd[1], "unsuccessful kill",19);
+                        write(fd[1], "unsuccessful kill",18);
                     }
             }else if (x==0){
                 bool isfound;
