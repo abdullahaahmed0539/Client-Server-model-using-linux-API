@@ -318,7 +318,6 @@ int main (){
                         }  
                         i++;
                     }
-                    cout << isfound<< endl;
                     if (isfound){
                     ret = kill(x,SIGTERM);
                     if (ret < 0){
