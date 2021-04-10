@@ -1,5 +1,5 @@
 #include <unistd.h>
-#include <error.h>
+//#include <error.h>
 #include <errno.h>
 #include <string.h>
 #include <iostream>
@@ -15,459 +15,518 @@
 using namespace std;
 
 
-//struct
-struct list {
-    int pid;
-    string name;
+
+struct listProcess {
+    int processId;
+    string processName;
     time_t startTime;
     time_t endTime;
     string elapsedTime;
-    bool active;
+    bool processActive;
 };
 
 
 
-bool errorHandler(char str []){
-    for( int index = 0 ; index< strlen(str); index++ ){   
-        if( (str[index] >= '0' && str[index] <= '9' )  || str[index] == ' ' || str[index] == '\n' || str[index] == ';' || str[index]== '-' /*for negative values*/ || str[index]== '.' /*for decimal values*/) {  
+bool isListNumerical(char numberList []){
+    bool isNumericalList;
+    for( int index = 0 ; index < strlen(numberList); index++ ){   
+        if( (numberList[index] >= '0' && numberList[index] <= '9' ) || numberList[index] == ' ' || numberList[index] == '\n' || numberList[index] == ';' || numberList[index]== '-' || numberList[index]== '.') {  
            continue;
-        
-        } else{ 
-            write(STDOUT_FILENO,"You have entered a non-numeric value. Please enter only numeric values.\n",71);
-            return false;
+        }
+        else{ 
+            write(STDOUT_FILENO,"You have entered a non-numeric value. Please enter only numeric values.\n",strlen("You have entered a non-numeric value. Please enter only numeric values.\n"));
+            return isNumericalList;
         }
     }
-
-    return true;
+    isNumericalList = true;
+    return isNumericalList;
 }
 
-char * tokenizer(char str []){
-    char *token = strtok(str, " \n");  
-    return token;
+char * tokenizer(char numberList []){
+    char * listToken = strtok(numberList, " \n");  
+    return listToken;
 }
-
-
 
 int main (){
-    int buff_size = 100;
+    int bufferSize = 100;
+    int pipeBetweenClientAndServer[2];
 
-    /*
-        Creating pipe
-        fd[0] ----> for reading
-        fd[1] ----> for writing
-    */
-    int fd[2];
-    if (pipe(fd) < 0)
+    if (pipe(pipeBetweenClientAndServer) < 0){
         perror("Error in creating pipe between client and server.");
+    }
 
-    //Creating Client & Server processes
-    int id = fork();
-    if(id < 0)
-    {
+
+
+    int ChildId = fork();
+    if(ChildId < 0){
         perror("Error while forking to create client & server.");
     }
-    else if (id == 0)  //Client process
-    {  
-        while(true){
-        //variable declarations
-        char command[buff_size] = {} ;
-        char response[buff_size] = {};
-        int ret;
-        char output_message_for_commands [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
-        char output_message_for_input [] = "Enter your command: ";
-        cout <<endl;
+    else if (ChildId == 0){  
+        //child process
+        bool keepRunning = true;
+        while(keepRunning){
+            char instruction[bufferSize], response[bufferSize] = {};
+            int ret;
+            char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
+            char outputMessageForSyntax [] = "For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n";
+            char outputMessageForInput [] = "Enter your instruction: ";
+            cout <<endl;
 
-        //Screen display
-        if(write(STDOUT_FILENO, &output_message_for_commands , strlen(output_message_for_commands)) < 0)
-            perror("Error while displaying message.1 ");
+            if(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)) < 0){
+                perror("Error message 1. ");
+            }
 
-        if (write(STDOUT_FILENO,"For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n", strlen("For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n"))< 0){
-            perror("Error while displaying message.8 "); 
-        }
+            if (write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax))< 0){
+                perror("Error message 2. ");             
+            }
 
-        if(write(STDOUT_FILENO, &output_message_for_input, strlen(output_message_for_input)) < 0)
-            perror("Error while displaying message.2 "); 
-        //User input  
-        ret = read(STDIN_FILENO, command, buff_size); 
-        if(ret < 0)
-            perror("Error while displaying message.3 ");
-        
-        
-        //Sending command to server
-        if(write(fd[1], command, ret) < 0)
-            perror("Error while displaying message.4 ");
-
-        sleep(1);
-
-        char * tok = tokenizer(command);
-        string toktemp = (string) tok;
-        if(command[0]=='e' && command[1]=='x' && command[2]=='i' && command[3]=='t' && command[4]=='\n'){
-                exit(getpid());
-        }
-        
-        
-        ret = read (fd[0], response, 500);
-        if (ret < 0)
-            perror("Error in reading response."); 
+            if(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)) < 0){
+                perror("Error message 3. "); 
+            }
 
 
-        if(write(STDOUT_FILENO, response, ret) < 0)
-            perror("Error while displaying response");
-             
-        
-       
 
 
-        
-        
-       
-        
-        cout<<"\n";
+            ret = read(STDIN_FILENO, instruction, bufferSize); 
+            if(ret < 0){
+                perror("Error message 4. ");
+            }
+            
+            
+
+
+            if(write(pipeBetweenClientAndServer[1], instruction, ret) < 0){
+                perror("Error message 5. ");
+            }
+
+
+            sleep(1);
+
+
+            char * instructionToken = tokenizer(instruction);
+            string toktemp = (string) instructionToken;
+            if(instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t'){
+                exit(1);
+            }
+            
+
+            ret = read (pipeBetweenClientAndServer[0], response, 500);
+            if (ret < 0){
+                perror("Error message 6. ");
+            }
+
+            if(write(STDOUT_FILENO, response, ret) < 0){
+                perror("Error message 7. ");
+            }    
+            
+            write(STDOUT_FILENO,"\n",1);
         }
 
     }
-    else   //Server process
-    {   
-        list processList [50];
-        for (size_t k = 0; k < 50; k++)
-        {
-             processList[k].pid = 0;
+
+
+
+
+
+
+
+    else{   
+        //Server process
+        int listSize = bufferSize;
+        listProcess processList [listSize];
+        bool keepRunning = true;
+
+
+        /*  
+            initialize process IDs to 0 since no process will
+            have id = 0
+        */
+        for (size_t index = 0; index < listSize; index++){
+             processList[index].processId = 0;
         }
         
 
-        while(true){
-        //Variable declarations
-        int ret;
-        char recieved_command [buff_size] = {};     
-        cout <<endl;
-      
-        //Recieving command from client
-        ret = read(fd[0], recieved_command, buff_size);
-        if(ret < 0)
-            perror("Error while reading from pipe b/w client & server.");
-    
-        char * tokens = tokenizer(recieved_command);
-        string token = (string) tokens;
+        while(keepRunning){
+            int ret;
+            char recievedCommand [bufferSize] = {};     
+            char * instructionTokens;
+            string instruction;
+
+            write(STDOUT_FILENO,"\n",1);
         
-        if( (token == "add") || (token == "sub") || (token == "mul") || (token == "div") )
-        {   
-           char buff [buff_size]; 
-           tokens = strtok(NULL," ");
-           bool allowed = false;
-           double answer = 0;
-           bool f =false;
-
-           while(tokens!=NULL)
-           {
-                allowed = errorHandler(tokens);
-              //  cout<<allowed;
-                if(!allowed){
-                    break;
-                }
-               
-                if ( *tokens == ';')
-                {
-                    int n = sprintf(buff, "ANSWER: %.2f\n", answer);
-                    int w = write(fd [1],buff,n);
-                    if(w < 0)
-                        perror("Error while displaying message.6 ");
-                    tokens = strtok(NULL, " ");
-                    answer = 0;
-                } 
-                else if (*tokens == '\n')
-                {
-                    continue;
-                }
-                else 
-                {
-                    if (token == "add" )
-                    {
-                        answer += atof(tokens); 
-                    }
-                    else if (token =="sub")
-                    {
-                        if (!f){
-                            answer=atof(tokens);
-                            f= true;
-                        }else{
-                            answer -= atof(tokens);
-                        }
-                        
-                    }
-                    else if (token == "mul")
-                    {
-                        if (answer == 0){
-                            answer = 1;
-                        }
-                        answer = answer * atof(tokens);
-                    }else {
-                        if (*tokens != '0')
-                        {
-                            if (answer == 0){
-                                answer = atof(tokens);
-                            }else{
-                                answer = answer / atof(tokens);
-                            }       
-                        }
-                        else
-                        {
-                            cout<<"can't divide by 0"<<endl;
-                            break;
-                        } 
-                        
-                    }
-                    
-                    tokens = strtok(NULL, " ");
-                } 
-
-           }
-           sleep(1);
-        }
-        else if (token == "run")
-        {   
-            //Pipe for child processes
-            char buff [buff_size];
-            int execPipe[2];
-            if (pipe2(execPipe, O_CLOEXEC) < 0)
-                perror("Error in piping for exec");
-            
-            //Forking for exec
-            int pid = fork();
-            
-           
-            if(pid < 0)
-            {
-                perror("error while forking in run. ");
+            ret = read(pipeBetweenClientAndServer[0], recievedCommand, bufferSize);
+            if(ret < 0){
+                perror("Error while reading from pipe b/w client & server.");
             }
-            else if (pid > 0)
-            {   
-                
-                tokens = strtok(NULL, " \n");
-                
-                
-                if(write(execPipe[1], tokens, strlen(tokens)) < 0)
-                    perror("Error while writing on execpipe. ");
 
-                sleep(1);
-                close(execPipe[1]);
-                ret = read(execPipe[0], buff, buff_size);
-
-                if(ret == 0){
-                    int i = 0;
-                    while(processList[i].pid != 0){
-                        i++;
-                    }
-                    processList[i].pid = pid;
-                    int size = strlen(tokens);
-                    char a [size];
-                    sprintf(a, "%s", tokens);
-                    processList[i].name = a;
-                    time_t currentTime;    
-                    time(&currentTime);
-                    processList[i].startTime = currentTime;
-                    processList[i].active = true;
-                    if(write(fd[1], "success", 7) < 0)
-                        perror("Error while displaying message.7 ");
-                }else{
-                    if(write(fd[1], buff, strlen(buff)) < 0)
-                         perror("Error while piping message. ");
-                }
-
-
-            }
-            else 
-            {
-                char App [buff_size];
-                char path[buff_size] = {'/','u','s','r','/','b','i','n','/'};
-                int i;
-                int ret = read(execPipe[0], App, buff_size);
-
-                close(execPipe[0]);
-
-                if(ret < 0)
-                    perror("Error while reading filename. ");
-
-                for (int i = 0; i < strlen(App); i++)
-                {
-                    path[9 + i] = App [i];
-                }                
-
-                if(execlp(path,path,NULL) < 0)
-                    perror("Error while exec()");
-                
-
-                if(write(execPipe[1], "failed", 6)< 0)
-                    perror("Error while piping message. ");
-
-             }
-            
-        }
-        else if (token == "kill") 
-        {
-            tokens = strtok(NULL, " \n");
-            int x = atoi (tokens);
+            instructionTokens = tokenizer(recievedCommand);
+            instruction = (string) instructionTokens;
             
             
-            if (x > 0){
-                    int i = 0;
-                    bool isfound;
-                    
-                    while(processList[i].pid !=0){
-                        if(processList[i].pid==x){
-                            isfound = true;
-                        }  
-                        i++;
-                    }
-                    if (isfound){
-                    ret = kill(x,SIGTERM);
-                    if (ret < 0){
-                        if(write(fd[1], "process not killed as it doesnt exist.",17) < 0)
-                            perror("Error while piping. ");
-                    }else{
-                    write(fd[1], "successfully killed",19);                 
-                    }
-                    int status;
-                    int wait_chk = waitpid(x,&status,0);
-                    if(wait_chk==-1)
-                        perror("Error in waitpid");
-                    int i = 0;
-                    while(processList[i].pid != x){
-                            i++;
-                    }
-                    processList[i].active = false;
-                    time_t Time; 
-                    time(&Time);   
-                    processList[i].endTime = Time;
+            
+            
+            
+            
+            
+            
+            
+            
+            if((instruction == "add") || (instruction == "sub") || (instruction == "mul") || (instruction == "div")){   
+                char buffer [bufferSize]; 
+                double answer = 0;
+                bool firstNumberFromTheNumberList = true;
+                instructionTokens = strtok(NULL," ");
 
-                    processList[i].elapsedTime = difftime(processList[i].endTime,processList[i].startTime);
-                    }else {
-                        write(fd[1], "unsuccessful kill",18);
-                    }
-            }else if (x==0){
-                bool isfound;
-                int i = 0;
-                string name  = (string) tokens;
-                while(processList[i].pid!=0){
-                    if( name == processList[i].name && processList[i].active){
-                        isfound = true;
+                while(instructionTokens!=NULL){
+
+                    if(!isListNumerical(instructionTokens)){
                         break;
-                     }
-                    i++;
-                }
-               
-
-
-                if(isfound){
-                    ret = kill(processList[i].pid, SIGTERM);
-                    if (ret < 0){
-                        if(write(fd[1], "process not killed",18) < 0)
-                            perror("Error while killing. ");
-                    }else{
-                        write(fd[1], "successfully killed",19);                 
                     }
-                    processList[i].active = false;
-                    time_t currentTime;    
-                    processList[i].endTime = currentTime;
 
-                    processList[i].elapsedTime = difftime(processList[i].endTime,processList[i].startTime);
-                }else{
-                    if(write(fd[1], "process not killed as it doesnt exist",strlen("process not killed as it doesnt exist"))< 0)
-                        perror("Error while piping 15. ");
-                }
-            }else {
-                write(fd[1], "failed in killing process",25);
-            }
-        }
-        else if (token == "exit")
-        {
-              exit(getpid());
-              sleep(1);
-        }
-        else if (token == "list" || token == "listall")
-        {
-                       
-              if (token == "listall"){
-                  int i = 0;
-                  char temp [500] = {};
-                  char tempall [500] = {};
-               
-                  while(processList[i].pid!= 0 ){
-                      if(!processList[i].active){
-                            tm st = *localtime(&processList[i].startTime);
-                            tm et = *localtime(&processList[i].endTime);
-
-                            int st_h = st.tm_hour;
-                            int st_m = st.tm_min;
-                            int st_s = st.tm_sec;
-
-                            int ed_h = et.tm_hour;
-                            int ed_m = et.tm_min;
-                            int ed_s = et.tm_sec;
-
-                            int el_h = ed_h - st_h;
-                            int el_m = ed_m - st_m;
-                            int el_s = ed_s - st_s;
-
-                            if (el_h < 0 ){
-                                el_h = -1 * el_h;
-                            }else if (el_m < 0){
-                                el_m = -1 * el_m;
-                            }else if (el_s < 0){
-                                el_s = -1 * el_s;
+                    if (*instructionTokens == ';'){
+                        int sprinfReturn = sprintf(buffer, "ANSWER: %.2f\n", answer);
+                        ret = write(pipeBetweenClientAndServer [1],buffer,sprinfReturn);
+                        if(ret < 0){
+                            perror("Error message 8. ");
+                        }
+                        instructionTokens = strtok(NULL, " ");
+                        answer = 0;
+                    } 
+                    else if (*instructionTokens == '\n'){
+                        continue;
+                    }
+                    else{
+                        if (instruction == "add" ){
+                            answer += atof(instructionTokens); 
+                        }
+                        else if (instruction =="sub"){
+                            if (firstNumberFromTheNumberList){
+                                answer=atof(instructionTokens);
+                                firstNumberFromTheNumberList= false;
                             }
-                           
-                            sprintf(temp, "pid: %d \nstarting time: %d hour %d min %d sec \n ending time: %d hour %d min %d sec \n elapsed time: %d hour %d min %d sec\n\n",
-                             processList[i].pid, st_h,st_m,st_s,ed_h,ed_m,ed_s,el_h,el_m,el_s);
-                            strcat(tempall,temp);
+                            else{
+                                answer -= atof(instructionTokens);
+                            }    
+                        }
+                        else if (instruction == "mul"){
+                            if (answer == 0){
+                                answer = 1;
+                            }
                             
+                            answer = answer * atof(instructionTokens);
+                            }
+                            else{
+                                if (*instructionTokens != '0'){
+                                    if (answer == 0){
+                                        answer = atof(instructionTokens);
+                                    }else{
+                                        answer = answer / atof(instructionTokens);
+                                    }       
+                                }
+                                else{
+                                    if(write(STDOUT_FILENO, "Can't divide by 0\n", strlen("Can't divide by 0\n")) < 0){
+                                        perror("Error message 9. ");
+                                    }
+                                    break;
+                                } 
+                            }
                             
-                      }else{
-                          tm st = *localtime(&processList[i].startTime);
-                                                                        
-                          int st_h = st.tm_hour;
-                          int st_m = st.tm_min;
-                          int st_s = st.tm_sec;
-                           
-                          sprintf(temp, "pid: %d \nstarting time: %d hour %d min %d sec \n\n ",
-                          processList[i].pid, st_h,st_m,st_s);
-                            
-                          strcat(tempall,temp);  
-                      }
+                            instructionTokens = strtok(NULL, " ");
+                        } 
+
+                }
+                sleep(1);
+            }
+
+
+
+
+
+
+
+
+            else if (instruction == "run"){   
+                char buffer [bufferSize];
+                int pipeBetweenServerAndExecProcess[2];
+                if (pipe2(pipeBetweenServerAndExecProcess, O_CLOEXEC) < 0){
+                    perror("Error in piping for exec ");
+                }
+                
+                
+                int pId = fork();
+                if(pId < 0){
+                    perror("error while forking in run. ");
+                }
+                else if (pId > 0){   
                     
-                      i++;
-                  }
+                    instructionTokens = strtok(NULL, " \n");
+                    if(write(pipeBetweenServerAndExecProcess[1], instructionTokens, strlen(instructionTokens)) < 0){
+                        perror("Error while writing on execpipe. ");
+                    }
 
-                  write(fd[1],tempall,strlen(tempall));
-              }
-              else{
-                  int i = 0;
-                  char temp [500], tempall[500] = {};
-                  while(processList[i].pid!= 0){
-                      if(processList[i].active){
-                          tm st = *localtime(&processList[i].startTime);
-                                                                        
-                          int st_h = st.tm_hour;
-                          int st_m = st.tm_min;
-                          int st_s = st.tm_sec;
-                           
-                          sprintf(temp, "pid: %d  \nstarting time: %d hour %d min %d sec \n\n ",
-                          processList[i].pid, st_h,st_m,st_s);
+                    sleep(1);
+
+                    close(pipeBetweenServerAndExecProcess[1]);
+                    ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
+                    if(ret == 0){
+                        int listIterator = 0;
+                        while(processList[listIterator].processId != 0){
+                            listIterator++;
+                        }
+
+                        processList[listIterator].processId = pId;
+                        char processName [strlen(instructionTokens)];
+                        sprintf(processName, "%s", instructionTokens);
+                        processList[listIterator].processName = processName;
+                        time_t currentTime;    
+                        time(&currentTime);
+                        processList[listIterator].startTime = currentTime;
+                        processList[listIterator].processActive = true;
+
+
+                        if(write(pipeBetweenClientAndServer[1], "Success", strlen("success")) < 0){
+                            perror("Error message 10. ");
+                        }
+                    }
+                    else{
+                        if(write(pipeBetweenClientAndServer[1], buffer, strlen(buffer)) < 0){
+                            perror("Error while piping message. ");
+                        }
+                    }
+                }
+                
+                
+                else{
+                    char application [bufferSize];
+                    char path[bufferSize] = {'/','u','s','r','/','b','i','n','/'};
+                    int ret = read(pipeBetweenServerAndExecProcess[0], application, bufferSize);
+
+                    close(pipeBetweenServerAndExecProcess[0]);
+
+                    if(ret < 0){
+                        perror("Error while reading filename. ");
+                    }
+
+                    for (int index = 0; index < strlen(application); index++){
+                        path[9 + index] = application [index];
+                    }                
+
+                    if(execlp(path,path,NULL) < 0){
+                        perror("Error while exec()");
+                    }
+
+                    if(write(pipeBetweenServerAndExecProcess[1], "Failed", strlen("Failed"))< 0){
+                        perror("Error while piping message. ");
+                    }
+                }
+            }
+
+
+
+
+
+
+
+
+            else if (instruction == "kill"){
+                int status, processListIterator;
+                instructionTokens = strtok(NULL, " \n");
+                int processId = atoi (instructionTokens);
+                
+                if (processId > 0){
+                    processListIterator = 0;
+                    bool pIdFound;
+                        
+                    while(processList[processListIterator].processId !=0){
+                        if(processList[processListIterator].processId==processId){
+                            pIdFound = true;
+                            break;
+                        }  
+                        processListIterator++;
+                    }
+                    if (pIdFound){
+                        ret = kill(processId,SIGTERM);
+                        if (ret < 0){
+                            if(write(pipeBetweenClientAndServer[1], "Process not killed as it doesnt exist.",strlen("process not killed as it doesnt exist.")) < 0){
+                                perror("Error while piping. ");
+                            }
+                        }
+                        else{
+                            write(pipeBetweenClientAndServer[1], "Successfully killed",strlen("successfully killed"));                 
+                        }
+
+                        int waitCheck = waitpid(processId,&status,0);
+                        if(waitCheck==-1){
+                            perror("Error in waitpid");
+                        }
+
+                        processList[processListIterator].processActive = false;
+                        time_t currentTime; 
+                        time(&currentTime);   
+                        processList[processListIterator].endTime = currentTime;
+
+                        processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
+                    }
+                    else{
+                            write(pipeBetweenClientAndServer[1], "Unsuccessful kill",strlen("unsuccessful kill"));
+                    }
+                }else if (processId==0){
+                    
+                    bool processFound;
+                    processListIterator = 0;
+                    string processName  = (string) instructionTokens;
+                    while(processList[processListIterator].processId!=0){
+                        if( processName == processList[processListIterator].processName && processList[processListIterator].processActive){
+                            processFound = true;
+                            break;
+                        }
+                        processListIterator++;
+                    }
+
+                    if(processFound){
+                        ret = kill(processList[processListIterator].processId, SIGTERM);
+                        if (ret < 0){
+                            if(write(pipeBetweenClientAndServer[1], "Process not killed",strlen("process not killed")) < 0){
+                                perror("Error while killing. ");
+                            }
+                        }else{
+                            if(write(pipeBetweenClientAndServer[1], "Successfully killed",strlen("successfully killed")) < 0){
+                                perror("Error while killing. ");
+                            };                 
+                        }
+
+                        processList[processListIterator].processActive = false;
+                        time_t currentTime;    
+                        processList[processListIterator].endTime = currentTime;
+                        processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
+                    }
+                    else{
+                        if(write(pipeBetweenClientAndServer[1], "Process not killed as it doesnt exist",strlen("process not killed as it doesnt exist")) < 0)
+                            perror("Error while piping. ");
+                    }
+                }else {
+                    write(pipeBetweenClientAndServer[1], "Failed in killing process",strlen("failed in killing process"));
+                }
+            }
+
+
+
+
+
+
+
+
+
+            else if (instruction == "exit"){
+                exit(getpid());
+                sleep(1);
+            }
+
+
+
+
+
+
+            else if (instruction == "list" || instruction == "listall"){
+                int processListIterator;        
+                if (instruction == "listall"){
+                    processListIterator = 0;
+                    char temperoryList[bufferSize], List[bufferSize] = {};
+                    
+                    while(processList[processListIterator].processId!= 0 ){
+                        if(!processList[processListIterator].processActive){
+                            tm startTime = *localtime(&processList[processListIterator].startTime);
+                            tm endTime = *localtime(&processList[processListIterator].endTime);
+
+                            int startTimeHour = startTime.tm_hour;
+                            int startTimeMinute = startTime.tm_min;
+                            int startTimeSecond = startTime.tm_sec;
+
+                            int endTimeHour = endTime.tm_hour;
+                            int endTimeMinute = endTime.tm_min;
+                            int endTimeSecond = endTime.tm_sec;
+
+                            int elapsedHour = endTimeHour - startTimeHour;
+                            int elapsedMinute = endTimeMinute - startTimeMinute;
+                            int elapsedSecond = endTimeSecond - startTimeSecond;
+
+                            if (elapsedHour < 0 ){
+                                elapsedHour = -1 * elapsedHour;
+                            }else if (elapsedMinute < 0){
+                                elapsedMinute = -1 * elapsedMinute;
+                            }else if (elapsedSecond < 0){
+                                elapsedSecond = -1 * elapsedSecond;
+                            }
                             
-                          strcat(tempall,temp);  
-                      }
-                      i++;
-                  }
-                  if(strlen(tempall) <= 0){write(fd[1],"No active processes",strlen("No active processes"));}else {write(fd[1],tempall,strlen(tempall));}  
-                  
-              }
-        }
-        else 
-        {
-            if(write(fd[1], "invalid", 7) < 0)
-                perror("Error while piping message. ");
+                            sprintf(temperoryList, "\n\nProcess id: %d \nStarting time: %d hour %d min %d sec \n Ending time: %d hour %d min %d sec \n Elapsed time: %d hour %d min %d sec\n\n",
+                            processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond,elapsedHour,elapsedMinute,elapsedSecond);
+                            strcat(List,temperoryList);
+                                    
+                        }
+                        else{
+                            tm startTime = *localtime(&processList[processListIterator].startTime);
+                                                                            
+                            int startTime_h = startTime.tm_hour;
+                            int startTime_m = startTime.tm_min;
+                            int startTimeSecond = startTime.tm_sec;
+                            
+                            sprintf(temperoryList, "\n\nProcess id: %d \nStarting time: %d hour %d min %d sec \n\n ",
+                            processList[processListIterator].processId, startTime_h,startTime_m,startTimeSecond);
+                                
+                            strcat(List,temperoryList);  
+                        }
+                        
+                        processListIterator++;
+                    }
 
-        }
-        sleep(1);
+                    if(write(pipeBetweenClientAndServer[1],List,strlen(List)) < 0){
+                        perror("Error:");
+                    }
+                }
+                else{
+                    processListIterator = 0;
+                    char temperoryList [500], List[500] = {};
+                    while(processList[processListIterator].processId!= 0){
+                        if(processList[processListIterator].processActive){
+                            tm startTime = *localtime(&processList[processListIterator].startTime);                                               
+                            int startTime_h = startTime.tm_hour;
+                            int startTime_m = startTime.tm_min;
+                            int startTimeSecond = startTime.tm_sec;
+                            
+                            sprintf(temperoryList, "\n\nProcess id: %d  \nStarting time: %d hour %d min %d sec \n\n ",
+                            processList[processListIterator].processId, startTime_h,startTime_m,startTimeSecond);
+                                
+                            strcat(List,temperoryList);  
+                        }
+                        processListIterator++;
+                    }
+                    if(strlen(List) <= 0){
+                        if(write(pipeBetweenClientAndServer[1],"No active processes",strlen("No active processes")) < 0){
+                            perror("Error message 11. ");
+                        }
+                    }
+                    else{
+                        if(write(pipeBetweenClientAndServer[1],List,strlen(List)) < 0){
+                            perror("Error message 12. ");
+                        }
+                    }    
+                }
+            }
+
+
+
+
+
+
+
+
+
+            else{
+                if(write(pipeBetweenClientAndServer[1], "Invalid", strlen("invalid")) < 0){
+                    perror("Error while piping message. ");
+                }
+            }
+            sleep(1);
         }
     }
     return 0;
