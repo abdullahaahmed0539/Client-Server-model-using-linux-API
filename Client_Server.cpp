@@ -1,5 +1,4 @@
 #include <unistd.h>
-//#include <error.h>
 #include <errno.h>
 #include <string.h>
 #include <iostream>
@@ -14,7 +13,15 @@
 
 using namespace std;
 
-
+/*
+    things to do:
+    1)correct divide by 0 problem
+    2)bug in if non numeric list is passed
+    3)Add pipe close
+    4)remove sleep
+    5)bug in listall---->segmentation fault
+    6)bug in invalid command
+*/
 
 struct listProcess {
     int processId;
@@ -25,12 +32,31 @@ struct listProcess {
     bool processActive;
 };
 
+bool characterIsNumerical (char character){
+    if(character >= '0' && character <= '9' ){
+        return true;
+    }
+    return false;
+}
 
+bool IsSpecialAllowedCharacter(char character){
+    if(character == ' ' || character == '\n' || character == ';' || character== '-' || character== '.'){
+        return true;
+    }
+    return false;
+}
+
+bool characterIsAllowed (char character){
+    if(characterIsNumerical(character) || IsSpecialAllowedCharacter(character)){
+        return true;
+    }
+    return false;
+}
 
 bool isListNumerical(char numberList []){
     bool isNumericalList;
     for( int index = 0 ; index < strlen(numberList); index++ ){   
-        if( (numberList[index] >= '0' && numberList[index] <= '9' ) || numberList[index] == ' ' || numberList[index] == '\n' || numberList[index] == ';' || numberList[index]== '-' || numberList[index]== '.') {  
+        if(characterIsAllowed(numberList[index])) {  
            continue;
         }
         else{ 
@@ -47,6 +73,125 @@ char * tokenizer(char numberList []){
     return listToken;
 }
 
+bool instructionIsToExit(char instruction [], string instructionFromServer){
+    if((instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t') || instructionFromServer=="exit"){
+        return true;
+    }
+    return false;
+}
+
+bool instructionIsForArithmeticOperations (string instruction){
+    if((instruction == "add") || (instruction == "sub") || (instruction == "mul") || (instruction == "div")){
+        return true;
+    }
+    return false;
+} 
+
+bool instructionIsToRun(string instruction){
+    if(instruction == "run"){
+        return true;
+    }
+    return false;
+}
+
+bool instructionIsToKillProcess(string instruction){
+    if(instruction == "kill"){
+        return true;
+    }
+    return false;
+}
+
+bool instructionIsToDisplayList(string instruction){
+    if(instruction == "listall" || instruction == "list"){
+        return true;
+    }
+    return false;
+}
+
+bool numberListHasNotEnded (char * instructionTokens){
+    if(instructionTokens==NULL){
+        return false;
+    }
+    return true;
+}
+
+bool isParentProcess(pid_t processId){
+    if (processId > 0){
+        return true;
+    }
+    return false;
+}
+
+int emptyIndexFinder(listProcess processList[], int listSize){
+    int listIterator = 0;
+    while(listIterator < listSize){
+        if(processList[listIterator].processId != 0){
+            listIterator++;
+        }
+        else{
+            break;
+        }
+    }
+    return listIterator;
+}
+
+int indexFinderByComparingProcessId(listProcess processList[], int requiredProcessId,int listSize){
+    int listIterator = 0;
+    bool foundProcess;
+    while(listIterator < listSize){
+        if(processList[listIterator].processId == requiredProcessId){
+            foundProcess = true;
+            break;
+        }
+
+        listIterator++;
+    }
+    
+    if(!foundProcess){
+        listIterator*=-1;
+    }
+    return listIterator;
+}
+
+int indexFinderByComparingNames(listProcess processList[], string processName, int listSize){
+    int listIterator = 0;
+    bool foundProcess;
+    while(listIterator < listSize){
+        if(processList[listIterator].processName == processName && processList[listIterator].processActive){
+            foundProcess = true;
+            break;
+        }
+        else{
+            listIterator++;
+        }
+    }
+    if(!foundProcess){
+        listIterator*=-1;
+    }
+    return listIterator;
+}
+
+bool isChildProcess(pid_t processId){
+    if (processId == 0){
+        return true;
+    }
+    return false;
+}
+
+bool processIdIsGiven(int returnValueOfAtoiFunction){
+    if(returnValueOfAtoiFunction > 0){
+        return true;
+    }
+    return false;
+}   
+
+bool processNameIsGiven(int returnValueOfAtoiFunction){
+    if(returnValueOfAtoiFunction == 0){
+        return true;
+    }
+    return false;
+} 
+
 int main (){
     int bufferSize = 100;
     int pipeBetweenClientAndServer[2];
@@ -61,8 +206,10 @@ int main (){
     if(ChildId < 0){
         perror("Error while forking to create client & server.");
     }
-    else if (ChildId == 0){  
-        //child process
+
+
+
+    else if (isChildProcess(ChildId)){  
         bool keepRunning = true;
         while(keepRunning){
             char instruction[bufferSize], response[bufferSize] = {};
@@ -104,8 +251,7 @@ int main (){
 
 
             char * instructionToken = tokenizer(instruction);
-            string toktemp = (string) instructionToken;
-            if(instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t'){
+            if(instructionIsToExit(instruction,"")){
                 exit(1);
             }
             
@@ -133,6 +279,7 @@ int main (){
     else{   
         //Server process
         int listSize = bufferSize;
+        int ret;
         listProcess processList [listSize];
         bool keepRunning = true;
 
@@ -147,7 +294,6 @@ int main (){
         
 
         while(keepRunning){
-            int ret;
             char recievedCommand [bufferSize] = {};     
             char * instructionTokens;
             string instruction;
@@ -171,13 +317,13 @@ int main (){
             
             
             
-            if((instruction == "add") || (instruction == "sub") || (instruction == "mul") || (instruction == "div")){   
+            if(instructionIsForArithmeticOperations(instruction)){   
                 char buffer [bufferSize]; 
                 double answer = 0;
                 bool firstNumberFromTheNumberList = true;
                 instructionTokens = strtok(NULL," ");
 
-                while(instructionTokens!=NULL){
+                while(numberListHasNotEnded(instructionTokens)){
 
                     if(!isListNumerical(instructionTokens)){
                         break;
@@ -244,8 +390,7 @@ int main (){
 
 
 
-
-            else if (instruction == "run"){   
+            else if (instructionIsToRun(instruction)){   
                 char buffer [bufferSize];
                 int pipeBetweenServerAndExecProcess[2];
                 if (pipe2(pipeBetweenServerAndExecProcess, O_CLOEXEC) < 0){
@@ -257,7 +402,7 @@ int main (){
                 if(pId < 0){
                     perror("error while forking in run. ");
                 }
-                else if (pId > 0){   
+                else if (isParentProcess(pId)){   
                     
                     instructionTokens = strtok(NULL, " \n");
                     if(write(pipeBetweenServerAndExecProcess[1], instructionTokens, strlen(instructionTokens)) < 0){
@@ -269,11 +414,7 @@ int main (){
                     close(pipeBetweenServerAndExecProcess[1]);
                     ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
                     if(ret == 0){
-                        int listIterator = 0;
-                        while(processList[listIterator].processId != 0){
-                            listIterator++;
-                        }
-
+                        int listIterator = emptyIndexFinder(processList, listSize);
                         processList[listIterator].processId = pId;
                         char processName [strlen(instructionTokens)];
                         sprintf(processName, "%s", instructionTokens);
@@ -328,26 +469,22 @@ int main (){
 
 
 
-            else if (instruction == "kill"){
+            else if (instructionIsToKillProcess(instruction)){
                 int status, processListIterator;
                 instructionTokens = strtok(NULL, " \n");
                 int processId = atoi (instructionTokens);
+                bool processFound = false;
                 
-                if (processId > 0){
-                    processListIterator = 0;
-                    bool pIdFound;
-                        
-                    while(processList[processListIterator].processId !=0){
-                        if(processList[processListIterator].processId==processId){
-                            pIdFound = true;
-                            break;
-                        }  
-                        processListIterator++;
+                if (processIdIsGiven(processId)){
+                    processListIterator = indexFinderByComparingProcessId(processList, processId, listSize);
+                    if(processListIterator >= 0){
+                        processFound = true;
                     }
-                    if (pIdFound){
+                    
+                    if (processFound){
                         ret = kill(processId,SIGTERM);
                         if (ret < 0){
-                            if(write(pipeBetweenClientAndServer[1], "Process not killed as it doesnt exist.",strlen("process not killed as it doesnt exist.")) < 0){
+                            if(write(pipeBetweenClientAndServer[1], "Problem in killing Process.",strlen("Problem in killing Process.")) < 0){
                                 perror("Error while piping. ");
                             }
                         }
@@ -355,6 +492,7 @@ int main (){
                             write(pipeBetweenClientAndServer[1], "Successfully killed",strlen("successfully killed"));                 
                         }
 
+                        status = 0; //remove this if code not working right
                         int waitCheck = waitpid(processId,&status,0);
                         if(waitCheck==-1){
                             perror("Error in waitpid");
@@ -368,19 +506,16 @@ int main (){
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
                     else{
-                            write(pipeBetweenClientAndServer[1], "Unsuccessful kill",strlen("unsuccessful kill"));
+                            write(pipeBetweenClientAndServer[1], "Unsuccessful kill. Process not found.",strlen("unsuccessful kill. Process not found."));
                     }
-                }else if (processId==0){
+
+                }else if (processNameIsGiven(processId)){
                     
-                    bool processFound;
-                    processListIterator = 0;
+                    processFound = false;
                     string processName  = (string) instructionTokens;
-                    while(processList[processListIterator].processId!=0){
-                        if( processName == processList[processListIterator].processName && processList[processListIterator].processActive){
-                            processFound = true;
-                            break;
-                        }
-                        processListIterator++;
+                    processListIterator = indexFinderByComparingNames(processList, processName, listSize);
+                    if(processListIterator >= 0){
+                        processFound =true;
                     }
 
                     if(processFound){
@@ -417,7 +552,7 @@ int main (){
 
 
 
-            else if (instruction == "exit"){
+            else if (instructionIsToExit(instructionTokens ,instruction)){
                 exit(getpid());
                 sleep(1);
             }
@@ -427,16 +562,17 @@ int main (){
 
 
 
-            else if (instruction == "list" || instruction == "listall"){
+            else if (instructionIsToDisplayList(instruction)){
                 int processListIterator;        
                 if (instruction == "listall"){
                     processListIterator = 0;
                     char temperoryList[bufferSize], List[bufferSize] = {};
+                    tm startTime, endTime;
                     
                     while(processList[processListIterator].processId!= 0 ){
                         if(!processList[processListIterator].processActive){
-                            tm startTime = *localtime(&processList[processListIterator].startTime);
-                            tm endTime = *localtime(&processList[processListIterator].endTime);
+                            startTime = *localtime(&processList[processListIterator].startTime);
+                            endTime = *localtime(&processList[processListIterator].endTime);
 
                             int startTimeHour = startTime.tm_hour;
                             int startTimeMinute = startTime.tm_min;
@@ -489,12 +625,12 @@ int main (){
                     while(processList[processListIterator].processId!= 0){
                         if(processList[processListIterator].processActive){
                             tm startTime = *localtime(&processList[processListIterator].startTime);                                               
-                            int startTime_h = startTime.tm_hour;
-                            int startTime_m = startTime.tm_min;
+                            int startTimeHour = startTime.tm_hour;
+                            int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
                             
                             sprintf(temperoryList, "\n\nProcess id: %d  \nStarting time: %d hour %d min %d sec \n\n ",
-                            processList[processListIterator].processId, startTime_h,startTime_m,startTimeSecond);
+                            processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond);
                                 
                             strcat(List,temperoryList);  
                         }
@@ -512,10 +648,6 @@ int main (){
                     }    
                 }
             }
-
-
-
-
 
 
 
