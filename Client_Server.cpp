@@ -615,14 +615,18 @@ int main (){
                             processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond);
 
 
-                            strcat(List,temperoryList);    //err in this. doesnt not concat the second time
+                            strcat(List,temperoryList);    
 
 
                         }
                         processListIterator++;
                     }
-
-                    if(write(pipeBetweenClientAndServer[1],List,strlen(List)) < 0){
+                    if(strlen(List) <= 0){
+                        if(write(pipeBetweenClientAndServer[1],"No processes.\n",strlen("No active processes.\n")) < 0){
+                            perror("Error message 11. ");
+                        }
+                    }
+                    else if(write(pipeBetweenClientAndServer[1],List,strlen(List)) < 0){
                         perror("Error:");
                     }
                 }
