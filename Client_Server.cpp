@@ -19,6 +19,8 @@ using namespace std;
     4)remove sleep
     5)bug in listall---->segmentation fault new bug occured too
     7)check if exit can happen from server only
+    8) when listall works it doesnt take the next input correctly
+
 */
 
 struct listProcess {
@@ -27,7 +29,7 @@ struct listProcess {
     time_t startTime;
     time_t endTime;
     string elapsedTime;
-    bool processActive;
+    bool active;
 };
 
 bool characterIsNumerical (char character){
@@ -154,7 +156,7 @@ int indexFinderByComparingNames(listProcess processList[], string processName, i
     int listIterator = 0;
     bool foundProcess;
     while(listIterator < listSize){
-        if(processList[listIterator].processName == processName && processList[listIterator].processActive){
+        if(processList[listIterator].processName == processName && processList[listIterator].active){
             foundProcess = true;
             break;
         }
@@ -427,7 +429,7 @@ int main (){
                         time_t currentTime;    
                         time(&currentTime);
                         processList[listIterator].startTime = currentTime;
-                        processList[listIterator].processActive = true;
+                        processList[listIterator].active = true;
 
 
                         if(write(pipeBetweenClientAndServer[1], "Success\n", strlen("success\n")) < 0){
@@ -503,7 +505,7 @@ int main (){
                             perror("Error in waitpid");
                         }
 
-                        processList[processListIterator].processActive = false;
+                        processList[processListIterator].active = false;
                         time_t currentTime; 
                         time(&currentTime);   
                         processList[processListIterator].endTime = currentTime;
@@ -536,8 +538,9 @@ int main (){
                             };                 
                         }
 
-                        processList[processListIterator].processActive = false;
+                        processList[processListIterator].active = false;
                         time_t currentTime;    
+                        time(&currentTime);
                         processList[processListIterator].endTime = currentTime;
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
@@ -574,11 +577,11 @@ int main (){
                 int processListIterator;        
                 if (instruction == "listall"){
                     processListIterator = 0;
-                    char temperoryList[bufferSize], List[bufferSize] = {};
+                    char temperoryList[bufferSize*10], List[bufferSize*10] = {};
                     tm startTime, endTime;
                     
                     while(processList[processListIterator].processId!= 0 ){
-                        if(!processList[processListIterator].processActive){
+                        if(!processList[processListIterator].active){
                             startTime = *localtime(&processList[processListIterator].startTime);
                             endTime = *localtime(&processList[processListIterator].endTime);
 
@@ -590,36 +593,34 @@ int main (){
                             int endTimeMinute = endTime.tm_min;
                             int endTimeSecond = endTime.tm_sec;
 
-                            int elapsedHour = endTimeHour - startTimeHour;
-                            int elapsedMinute = endTimeMinute - startTimeMinute;
-                            int elapsedSecond = endTimeSecond - startTimeSecond;
+                            time_t s = difftime(processList[processListIterator].endTime , processList[processListIterator].startTime);
+                            tm elapsedTime;
 
-                            if (elapsedHour < 0 ){
-                                elapsedHour = -1 * elapsedHour;
-                            }else if (elapsedMinute < 0){
-                                elapsedMinute = -1 * elapsedMinute;
-                            }else if (elapsedSecond < 0){
-                                elapsedSecond = -1 * elapsedSecond;
-                            }
+                            elapsedTime = *localtime(&s);
+                            int elapsedHour = elapsedTime.tm_hour;
+                            int elapsedMinute = elapsedTime.tm_min;
+                            int elapsedSecond = elapsedTime.tm_sec;
                             
-                            sprintf(temperoryList, "\n\nProcess id: %d \nStarting time: %d hour %d min %d sec \n Ending time: %d hour %d min %d sec \n Elapsed time: %d hour %d min %d sec\n\n",
+                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d hour %d min %d sec\n******************************************\n",
                             processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond,elapsedHour,elapsedMinute,elapsedSecond);
                             strcat(List,temperoryList);
                                     
                         }
                         else{
-                            tm startTime = *localtime(&processList[processListIterator].startTime);
-                                                                            
-                            int startTime_h = startTime.tm_hour;
-                            int startTime_m = startTime.tm_min;
+                            tm startTime = *localtime(&processList[processListIterator].startTime);    
+                            int startTimeHour = startTime.tm_hour;
+                            int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
                             
-                            sprintf(temperoryList, "\n\nProcess id: %d \nStarting time: %d hour %d min %d sec \n\n ",
-                            processList[processListIterator].processId, startTime_h,startTime_m,startTimeSecond);
-                                
-                            strcat(List,temperoryList);  
+
+                            sprintf(temperoryList, "\n\n*************Process**************\nProcess id: %d  \nStarting time: %d hour %d min %d sec. \n*******************************************\n ",
+                            processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond);
+
+
+                            strcat(List,temperoryList);    //err in this. doesnt not concat the second time
+
+
                         }
-                        
                         processListIterator++;
                     }
 
@@ -631,13 +632,13 @@ int main (){
                     processListIterator = 0;
                     char temperoryList [500], List[500] = {};
                     while(processList[processListIterator].processId!= 0){
-                        if(processList[processListIterator].processActive){
+                        if(processList[processListIterator].active){
                             tm startTime = *localtime(&processList[processListIterator].startTime);                                               
                             int startTimeHour = startTime.tm_hour;
                             int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
                             
-                            sprintf(temperoryList, "\n\nProcess id: %d  \nStarting time: %d hour %d min %d sec \n\n ",
+                            sprintf(temperoryList, "\n*************Active Process**************\nProcess id: %d  \nStarting time: %d hour %d min %d sec. \n*******************************************\n ",
                             processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond);
                                 
                             strcat(List,temperoryList);  
