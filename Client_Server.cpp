@@ -17,9 +17,7 @@ using namespace std;
     things to do:
     3)Add pipe close
     4)remove sleep
-    5)bug in listall---->segmentation fault new bug occured too
     7)check if exit can happen from server only
-    8) when listall works it doesnt take the next input correctly
 
 */
 
@@ -593,13 +591,13 @@ int main (){
                             int endTimeMinute = endTime.tm_min;
                             int endTimeSecond = endTime.tm_sec;
 
-                            time_t s = difftime(processList[processListIterator].endTime , processList[processListIterator].startTime);
-                            tm elapsedTime;
-
-                            elapsedTime = *localtime(&s);
-                            int elapsedHour = elapsedTime.tm_hour;
-                            int elapsedMinute = elapsedTime.tm_min;
-                            int elapsedSecond = elapsedTime.tm_sec;
+                        
+                            int elapsedHour = endTimeHour - startTimeHour;
+                            if(elapsedHour<0){elapsedHour*=-1;}
+                            int elapsedMinute = endTimeMinute - startTimeMinute;
+                            if(elapsedMinute<0){elapsedMinute*=-1;}
+                            int elapsedSecond = endTimeSecond - startTimeSecond;
+                            if(elapsedSecond<0){elapsedSecond*=-1;}
                             
                             sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d hour %d min %d sec\n******************************************\n",
                             processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond,elapsedHour,elapsedMinute,elapsedSecond);
