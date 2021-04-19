@@ -16,11 +16,11 @@ using namespace std;
 /*
     things to do:
     1)correct divide by 0 problem
-    2)bug in if non numeric list is passed
     3)Add pipe close
     4)remove sleep
     5)bug in listall---->segmentation fault
     6)bug in invalid command
+    7)check if exit can happen from server only
 */
 
 struct listProcess {
@@ -60,7 +60,6 @@ bool isListNumerical(char numberList []){
            continue;
         }
         else{ 
-            write(STDOUT_FILENO,"You have entered a non-numeric value. Please enter only numeric values.\n",strlen("You have entered a non-numeric value. Please enter only numeric values.\n"));
             return isNumericalList;
         }
     }
@@ -192,6 +191,11 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
     return false;
 } 
 
+// void handler(int sig){
+     
+// }
+
+listProcess processList [100];
 int main (){
     int bufferSize = 100;
     int pipeBetweenClientAndServer[2];
@@ -280,7 +284,6 @@ int main (){
         //Server process
         int listSize = bufferSize;
         int ret;
-        listProcess processList [listSize];
         bool keepRunning = true;
 
 
@@ -326,6 +329,10 @@ int main (){
                 while(numberListHasNotEnded(instructionTokens)){
 
                     if(!isListNumerical(instructionTokens)){
+                        ret = write(pipeBetweenClientAndServer [1], "List is not numerical.", strlen("List is not numerical."));
+                        if(ret < 0){
+                            perror("Error in list. ");
+                        }
                         break;
                     }
 
@@ -397,7 +404,7 @@ int main (){
                     perror("Error in piping for exec ");
                 }
                 
-                
+              //  signal (SIGCHLD, handler);
                 int pId = fork();
                 if(pId < 0){
                     perror("error while forking in run. ");
@@ -410,7 +417,7 @@ int main (){
                     }
 
                     sleep(1);
-
+                  //  waitpid(pId, NULL, WNOHANG);
                     close(pipeBetweenServerAndExecProcess[1]);
                     ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
                     if(ret == 0){
@@ -492,7 +499,7 @@ int main (){
                             write(pipeBetweenClientAndServer[1], "Successfully killed",strlen("successfully killed"));                 
                         }
 
-                        status = 0; //remove this if code not working right
+                        status = 0; 
                         int waitCheck = waitpid(processId,&status,0);
                         if(waitCheck==-1){
                             perror("Error in waitpid");
@@ -654,7 +661,7 @@ int main (){
 
 
             else{
-                if(write(pipeBetweenClientAndServer[1], "Invalid", strlen("invalid")) < 0){
+                if(write(pipeBetweenClientAndServer[1], "Invalid instruction", strlen("invalid  instruction")) < 0){
                     perror("Error while piping message. ");
                 }
             }
