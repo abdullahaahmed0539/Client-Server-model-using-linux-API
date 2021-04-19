@@ -202,9 +202,13 @@ void handler(int sig){
 
 int main (){
     int bufferSize = 100;
-    int pipeBetweenClientAndServer[2];
+    int clientWrite[2], serverWrite[2];
 
-    if (pipe(pipeBetweenClientAndServer) < 0){
+    if (pipe(clientWrite) < 0){
+        perror("Error in creating pipe between client and server.");
+    }
+
+    if (pipe(serverWrite) < 0){
         perror("Error in creating pipe between client and server.");
     }
 
@@ -212,14 +216,15 @@ int main (){
     
     int ChildId = fork();
     signal(SIGCHLD,handler);
+    
+    
     if(ChildId < 0){
         perror("Error while forking to create client & server.");
     }
-
-
-
     else if (isChildProcess(ChildId)){  
         bool keepRunning = true;
+        close(clientWrite[0]);
+        close(serverWrite[1]);
         while(keepRunning){
             char instruction[bufferSize], response[bufferSize] = {};
             int ret;
@@ -250,7 +255,7 @@ int main (){
             
 
 
-            if(write(pipeBetweenClientAndServer[1], instruction, ret) < 0){
+            if(write(clientWrite[1], instruction, ret) < 0){
                 perror("Error message 5. ");
             }
 
@@ -264,7 +269,7 @@ int main (){
             }
             
 
-            ret = read (pipeBetweenClientAndServer[0], response, 500);
+            ret = read (serverWrite[0], response, 500);
             if (ret < 0){
                 perror("Error message 6. ");
             }
@@ -291,6 +296,8 @@ int main (){
         int ret;
         bool keepRunning = true;
 
+        close(clientWrite[1]);
+        close(serverWrite[0]);
 
         /*  
             initialize process IDs to 0 since no process will
@@ -308,6 +315,7 @@ int main (){
 
             int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
             if(anyChildKilled){
+                anyChildKilled = false;
                 bool processFound;
                 int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, listSize);
                     if(processListIterator >= 0){
@@ -329,7 +337,7 @@ int main (){
             }
 
 
-            ret = read(pipeBetweenClientAndServer[0], recievedCommand, bufferSize);
+            ret = read(clientWrite[0], recievedCommand, bufferSize);
             if(ret < 0){
                 perror("Error while reading from pipe b/w client & server.");
             }
@@ -355,7 +363,7 @@ int main (){
                 while(numberListHasNotEnded(instructionTokens)){
 
                     if(!isListNumerical(instructionTokens)){
-                        ret = write(pipeBetweenClientAndServer [1], "List is not numerical.\n", strlen("List is not numerical.\n"));
+                        ret = write(serverWrite[1], "List is not numerical.\n", strlen("List is not numerical.\n"));
                         if(ret < 0){
                             perror("Error in list. ");
                         }
@@ -364,7 +372,7 @@ int main (){
 
                     if (*instructionTokens == ';'){
                         int sprinfReturn = sprintf(buffer, "ANSWER: %.2f\n", answer);
-                        ret = write(pipeBetweenClientAndServer [1],buffer,sprinfReturn);
+                        ret = write(serverWrite [1],buffer,sprinfReturn);
                         if(ret < 0){
                             perror("Error message 8. ");
                         }
@@ -404,7 +412,7 @@ int main (){
                                 firstNumberFromTheNumberList = false;   
                             }
                             else{
-                                ret = write(pipeBetweenClientAndServer [1],"Can't divide by 0\n", strlen("Can't divide by 0\n"));
+                                ret = write(serverWrite [1],"Can't divide by 0\n", strlen("Can't divide by 0\n"));
                                 if(ret < 0){
                                     perror("Error message 8. ");
                                  }
@@ -458,12 +466,12 @@ int main (){
                         processList[listIterator].active = true;
 
 
-                        if(write(pipeBetweenClientAndServer[1], "Success\n", strlen("success\n")) < 0){
+                        if(write(serverWrite[1], "Success\n", strlen("success\n")) < 0){
                             perror("Error message 10. ");
                         }
                     }
                     else{
-                        if(write(pipeBetweenClientAndServer[1], buffer, strlen(buffer)) < 0){
+                        if(write(serverWrite[1], buffer, strlen(buffer)) < 0){
                             perror("Error while piping message. ");
                         }
                     }
@@ -517,12 +525,12 @@ int main (){
                     if (processFound){
                         ret = kill(processId, SIGTERM);
                         if (ret < 0){
-                            if(write(pipeBetweenClientAndServer[1], "Problem in killing Process.\n",strlen("Problem in killing Process.\n")) < 0){
+                            if(write(serverWrite[1], "Problem in killing Process.\n",strlen("Problem in killing Process.\n")) < 0){
                                 perror("Error while piping. ");
                             }
                         }
                         else{
-                            write(pipeBetweenClientAndServer[1], "Successfully killed.\n",strlen("successfully killed.\n"));                 
+                            write(serverWrite[1], "Successfully killed.\n",strlen("successfully killed.\n"));                 
                         }
 
                         status = 0; 
@@ -539,7 +547,7 @@ int main (){
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
                     else{
-                            write(pipeBetweenClientAndServer[1], "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n"));
+                            write(serverWrite[1], "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n"));
                     }
 
                 }
@@ -555,11 +563,11 @@ int main (){
                     if(processFound){
                         ret = kill(processList[processListIterator].processId, SIGTERM);
                         if (ret < 0){
-                            if(write(pipeBetweenClientAndServer[1], "Process not killed.\n",strlen("process not killed.\n")) < 0){
+                            if(write(serverWrite[1], "Process not killed.\n",strlen("process not killed.\n")) < 0){
                                 perror("Error while killing. ");
                             }
                         }else{
-                            if(write(pipeBetweenClientAndServer[1], "Successfully killed.\n",strlen("successfully killed.\n")) < 0){
+                            if(write(serverWrite[1], "Successfully killed.\n",strlen("successfully killed.\n")) < 0){
                                 perror("Error while killing. ");
                             };                 
                         }
@@ -571,12 +579,12 @@ int main (){
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
                     else{
-                        if(write(pipeBetweenClientAndServer[1], "Process not killed as it doesnt exist.\n",strlen("process not killed as it doesnt exist.\n")) < 0)
+                        if(write(serverWrite[1], "Process not killed as it doesnt exist.\n",strlen("process not killed as it doesnt exist.\n")) < 0)
                             perror("Error while piping. ");
                     }
                 }
                 else {
-                    write(pipeBetweenClientAndServer[1], "Failed in killing process.\n",strlen("failed in killing process.\n"));
+                    write(serverWrite[1], "Failed in killing process.\n",strlen("failed in killing process.\n"));
                 }
                 sleep(1);
             }
@@ -650,11 +658,11 @@ int main (){
                         processListIterator++;
                     }
                     if(strlen(List) <= 0){
-                        if(write(pipeBetweenClientAndServer[1],"No processes.\n",strlen("No active processes.\n")) < 0){
+                        if(write(serverWrite[1],"No processes.\n",strlen("No active processes.\n")) < 0){
                             perror("Error message 11. ");
                         }
                     }
-                    else if(write(pipeBetweenClientAndServer[1],List,strlen(List)) < 0){
+                    else if(write(serverWrite[1],List,strlen(List)) < 0){
                         perror("Error:");
                     }
                 }
@@ -676,12 +684,12 @@ int main (){
                         processListIterator++;
                     }
                     if(strlen(List) <= 0){
-                        if(write(pipeBetweenClientAndServer[1],"No active processes.\n",strlen("No active processes.\n")) < 0){
+                        if(write(serverWrite[1],"No active processes.\n",strlen("No active processes.\n")) < 0){
                             perror("Error message 11. ");
                         }
                     }
                     else{
-                        if(write(pipeBetweenClientAndServer[1],List,strlen(List)) < 0){
+                        if(write(serverWrite[1],List,strlen(List)) < 0){
                             perror("Error message 12. ");
                         }
                     }    
@@ -694,7 +702,7 @@ int main (){
 
 
             else{
-                if(write(pipeBetweenClientAndServer[1], "Invalid instruction.\n", strlen("invalid  instruction.\n")) < 0){
+                if(write(serverWrite[1], "Invalid instruction.\n", strlen("invalid  instruction.\n")) < 0){
                     perror("Error while piping message. ");
                 }
             }
