@@ -189,9 +189,16 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
     return false;
 } 
 
-// void handler(int sig){
-     
-// }
+
+
+bool anyChildKilled;
+void handler(int sig){
+     if(sig == SIGCHLD){
+         anyChildKilled = true;
+     }
+}
+
+
 
 int main (){
     int bufferSize = 100;
@@ -202,8 +209,9 @@ int main (){
     }
 
 
-
+    
     int ChildId = fork();
+    signal(SIGCHLD,handler);
     if(ChildId < 0){
         perror("Error while forking to create client & server.");
     }
@@ -298,7 +306,29 @@ int main (){
             char * instructionTokens;
             string instruction;
 
-        
+            int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
+            if(anyChildKilled){
+                bool processFound;
+                int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, listSize);
+                    if(processListIterator >= 0){
+                         processFound = true;
+                    }
+                    
+                    if (processFound){
+
+    
+
+                        processList[processListIterator].active = false;
+                        time_t currentTime; 
+                        time(&currentTime);   
+                        processList[processListIterator].endTime = currentTime;
+
+                        processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
+                    
+                    }
+            }
+
+
             ret = read(pipeBetweenClientAndServer[0], recievedCommand, bufferSize);
             if(ret < 0){
                 perror("Error while reading from pipe b/w client & server.");
@@ -402,7 +432,6 @@ int main (){
                     perror("Error in piping for exec ");
                 }
                 
-              //  signal (SIGCHLD, handler);
                 int pId = fork();
                 if(pId < 0){
                     perror("error while forking in run. ");
@@ -415,7 +444,6 @@ int main (){
                     }
 
                     sleep(1);
-                  //  waitpid(pId, NULL, WNOHANG);
                     close(pipeBetweenServerAndExecProcess[1]);
                     ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
                     if(ret == 0){
