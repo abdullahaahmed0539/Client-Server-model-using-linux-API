@@ -15,7 +15,6 @@ using namespace std;
 
 /*
     things to do:
-    1)correct divide by 0 problem
     3)Add pipe close
     4)remove sleep
     5)bug in listall---->segmentation fault
@@ -368,21 +367,23 @@ int main (){
                             
                             answer = answer * atof(instructionTokens);
                             }
-                            else{
-                                if (*instructionTokens != '0'){
-                                    if (answer == 0){
-                                        answer = atof(instructionTokens);
-                                    }else{
-                                        answer = answer / atof(instructionTokens);
-                                    }       
-                                }
-                                else{
-                                    if(write(STDOUT_FILENO, "Can't divide by 0\n", strlen("Can't divide by 0\n")) < 0){
-                                        perror("Error message 9. ");
-                                    }
-                                    break;
-                                } 
+                        else{
+                            if (*instructionTokens != '0' || firstNumberFromTheNumberList){
+                                if (firstNumberFromTheNumberList){
+                                    answer = atof(instructionTokens);
+                                }else{
+                                    answer = answer / atof(instructionTokens);
+                                }    
+                                firstNumberFromTheNumberList = false;   
                             }
+                            else{
+                                ret = write(pipeBetweenClientAndServer [1],"Can't divide by 0", strlen("Can't divide by 0"));
+                                if(ret < 0){
+                                    perror("Error message 8. ");
+                                 }
+                                break;
+                            } 
+                        }
                             
                             instructionTokens = strtok(NULL, " ");
                         } 
