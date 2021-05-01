@@ -291,7 +291,7 @@ int main(void){
                 perror("Error while reading from pipe b/w client & server.");
             }
 
-            write(1, "hello mohammad",strlen("hello mohammad"));
+            write(1, "Request Recieved.",strlen("Request Recieved."));
 
             instructionTokens = tokenizer(recievedCommand);
             instruction = (string) instructionTokens;
@@ -404,7 +404,7 @@ int main(void){
                     }
 
                     sleep(1);
-                    close(msgsock);
+                    
                     ret = read(msgsock, buffer, bufferSize);
                     if(ret == 0){
                         int listIterator = emptyIndexFinder(processList, listSize);
@@ -435,7 +435,6 @@ int main(void){
                     char path[bufferSize] = {'/','u','s','r','/','b','i','n','/'};
                     int ret = read(msgsock, application, bufferSize);
 
-                    close(msgsock);
 
                     if(ret < 0){
                         perror("Error while reading filename. ");

@@ -191,12 +191,12 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
 
 
 
-bool anyChildKilled;
-void handler(int sig){
-     if(sig == SIGCHLD){
-         anyChildKilled = true;
-     }
-}
+listProcess processList [10000];
+// void handler(int sig){
+//      if(sig == SIGCHLD){
+//          anyChildKilled = true;
+//      }
+// }
 
 
 
@@ -215,7 +215,7 @@ int main (){
 
     
     int ChildId = fork();
-    signal(SIGCHLD,handler);
+    // signal(SIGCHLD,handler);
     
     
     if(ChildId < 0){
@@ -226,7 +226,7 @@ int main (){
         close(clientWrite[0]);
         close(serverWrite[1]);
         while(keepRunning){
-            char instruction[bufferSize], response[bufferSize] = {};
+            char instruction[bufferSize], response[10000] = {};
             int ret;
             char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
             char outputMessageForSyntax [] = "For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n";
@@ -269,7 +269,7 @@ int main (){
             }
             
 
-            ret = read (serverWrite[0], response, 500);
+            ret = read (serverWrite[0], response, 10000);
             if (ret < 0){
                 perror("Error message 6. ");
             }
@@ -292,7 +292,7 @@ int main (){
     else{   
         //Server process
         int listSize = bufferSize;
-        listProcess processList [listSize];
+        
         int ret;
         bool keepRunning = true;
 
@@ -313,28 +313,28 @@ int main (){
             char * instructionTokens;
             string instruction;
 
-            int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
-            if(anyChildKilled){
-                anyChildKilled = false;
-                bool processFound;
-                int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, listSize);
-                    if(processListIterator >= 0){
-                         processFound = true;
-                    }
+            // int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
+            // if(anyChildKilled){
+            //     anyChildKilled = false;
+            //     bool processFound;
+            //     int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, listSize);
+            //         if(processListIterator >= 0){
+            //              processFound = true;
+            //         }
                     
-                    if (processFound){
+            //         if (processFound){
 
     
 
-                        processList[processListIterator].active = false;
-                        time_t currentTime; 
-                        time(&currentTime);   
-                        processList[processListIterator].endTime = currentTime;
+            //             processList[processListIterator].active = false;
+            //             time_t currentTime; 
+            //             time(&currentTime);   
+            //             processList[processListIterator].endTime = currentTime;
 
-                        processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
+            //             processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     
-                    }
-            }
+            //         }
+            // }
 
 
             ret = read(clientWrite[0], recievedCommand, bufferSize);
@@ -454,7 +454,7 @@ int main (){
                     sleep(1);
                     close(pipeBetweenServerAndExecProcess[1]);
                     ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
-                    if(ret == 0){
+                    if(ret >= 0){
                         int listIterator = emptyIndexFinder(processList, listSize);
                         processList[listIterator].processId = pId;
                         char processName [strlen(instructionTokens)];
@@ -611,7 +611,7 @@ int main (){
                 int processListIterator;        
                 if (instruction == "listall"){
                     processListIterator = 0;
-                    char temperoryList[bufferSize*10], List[bufferSize*10] = {};
+                    char temperoryList[100000], List[100000] = {};
                     tm startTime, endTime;
                     
                     while(processList[processListIterator].processId!= 0 ){
@@ -668,7 +668,7 @@ int main (){
                 }
                 else{
                     processListIterator = 0;
-                    char temperoryList [500], List[500] = {};
+                    char temperoryList [100000], List[100000] = {};
                     while(processList[processListIterator].processId!= 0){
                         if(processList[processListIterator].active){
                             tm startTime = *localtime(&processList[processListIterator].startTime);                                               
