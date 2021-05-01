@@ -192,11 +192,24 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
 
 
 listProcess processList [10000];
-// void handler(int sig){
-//      if(sig == SIGCHLD){
-//          anyChildKilled = true;
-//      }
-// }
+void handler(int sig){
+     if(sig == SIGCHLD){
+        int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
+        bool processFound;
+        int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, 10000);
+        if(processListIterator >= 0){
+            processFound = true;
+        }
+                    
+        if (processFound){
+            processList[processListIterator].active = false;
+            time_t currentTime; 
+            time(&currentTime);   
+            processList[processListIterator].endTime = currentTime;
+            processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
+     }
+}
+}
 
 
 
@@ -215,7 +228,7 @@ int main (){
 
     
     int ChildId = fork();
-    // signal(SIGCHLD,handler);
+    signal(SIGCHLD,handler);
     
     
     if(ChildId < 0){
