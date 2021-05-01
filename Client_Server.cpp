@@ -15,8 +15,6 @@ using namespace std;
 
 /*
     things to do:
-    3)Add pipe close
-    4)remove sleep
     7)check if exit can happen from server only
 
 */
@@ -193,7 +191,7 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
 
 listProcess processList [10000];
 void handler(int sig){
-     if(sig == SIGCHLD){
+    if(sig == SIGCHLD){
         int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
         bool processFound;
         int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, 10000);
@@ -207,8 +205,8 @@ void handler(int sig){
             time(&currentTime);   
             processList[processListIterator].endTime = currentTime;
             processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
-     }
-}
+        }
+    }
 }
 
 

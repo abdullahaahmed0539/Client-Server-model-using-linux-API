@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
         bool keepRunning = true;
         
         while(keepRunning){
-            char instruction[100], response[100] = {};
+            char instruction[100], response[10000] = {};
             int ret;
             char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
             char outputMessageForSyntax [] = "For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n";
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
             }
             
 
-            ret = read (sock, response, 500);
+            ret = read (sock, response, 10000);
             if (ret < 0){
                 perror("Error message 6. ");
             }

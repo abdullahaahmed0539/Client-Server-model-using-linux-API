@@ -17,9 +17,8 @@ using namespace std;
 
 
 
-/*1)error in run command 
-  2)check kill
-  3)check lists
+/*
+  3)errors in lists: not adding to list
 
 */
 
@@ -193,11 +192,24 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
 
 
 
-bool anyChildKilled;
+listProcess processList [10000];
 void handler(int sig){
-     if(sig == SIGCHLD){
-         anyChildKilled = true;
-     }
+    if(sig == SIGCHLD){
+        int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
+        bool processFound;
+        int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, 10000);
+        if(processListIterator >= 0){
+            processFound = true;
+        }
+                    
+        if (processFound){
+            processList[processListIterator].active = false;
+            time_t currentTime; 
+            time(&currentTime);   
+            processList[processListIterator].endTime = currentTime;
+            processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
+        }
+    }
 }
 
 int main(void){
@@ -242,7 +254,6 @@ int main(void){
         
         //Server process
         int listSize, bufferSize = 100;
-        listProcess processList [listSize];
         int ret;
         bool keepRunning = true;
 
@@ -262,36 +273,13 @@ int main(void){
             char * instructionTokens;
             string instruction;
 
-            int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
-            if(anyChildKilled){
-                anyChildKilled = false;
-                bool processFound;
-                int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, listSize);
-                    if(processListIterator >= 0){
-                         processFound = true;
-                    }
-                    
-                    if (processFound){
-
-    
-
-                        processList[processListIterator].active = false;
-                        time_t currentTime; 
-                        time(&currentTime);   
-                        processList[processListIterator].endTime = currentTime;
-
-                        processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
-                    
-                    }
-            }
-
 
             ret = read(msgsock, recievedCommand, bufferSize);
             if(ret < 0){
                 perror("Error while reading from pipe b/w client & server.");
             }
 
-            write(1, "Request Recieved.",strlen("Request Recieved."));
+            write(1, "Request Recieved.\n",strlen("Request Recieved.\n"));
 
             instructionTokens = tokenizer(recievedCommand);
             instruction = (string) instructionTokens;
@@ -387,11 +375,11 @@ int main(void){
 
             else if (instructionIsToRun(instruction)){   
                 char buffer [bufferSize];
-                // // int pipeBetweenServerAndExecProcess[2];
-                // if (pipe2(pipeBetweenServerAndExecProcess, O_CLOEXEC) < 0){
-                //     perror("Error in piping for exec ");
-                // }
-                
+                int pipeBetweenServerAndExecProcess[2];
+                if (pipe2(pipeBetweenServerAndExecProcess, O_CLOEXEC) < 0){
+                    perror("Error in piping for exec ");
+                }
+
                 int pId = fork();
                 if(pId < 0){
                     perror("error while forking in run. ");
@@ -399,14 +387,15 @@ int main(void){
                 else if (isParentProcess(pId)){   
                     
                     instructionTokens = strtok(NULL, " \n");
-                    if(write(msgsock, instructionTokens, strlen(instructionTokens)) < 0){
+                    if(write(pipeBetweenServerAndExecProcess[1], instructionTokens, strlen(instructionTokens)) < 0){
                         perror("Error while writing on execpipe. ");
                     }
 
                     sleep(1);
+                    close(pipeBetweenServerAndExecProcess[1]);
                     
-                    ret = read(msgsock, buffer, bufferSize);
-                    if(ret == 0){
+                    ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
+                    if(ret <= 0){
                         int listIterator = emptyIndexFinder(processList, listSize);
                         processList[listIterator].processId = pId;
                         char processName [strlen(instructionTokens)];
@@ -419,7 +408,7 @@ int main(void){
 
 
                         if(write(msgsock, "Success\n", strlen("success\n")) < 0){
-                            perror("Error message 10. ");
+                            perror("Error message 10. ");   
                         }
                     }
                     else{
@@ -433,7 +422,9 @@ int main(void){
                 else{
                     char application [bufferSize];
                     char path[bufferSize] = {'/','u','s','r','/','b','i','n','/'};
-                    int ret = read(msgsock, application, bufferSize);
+                    int ret = read(pipeBetweenServerAndExecProcess[0], application, bufferSize);
+
+                    close(pipeBetweenServerAndExecProcess[0]);
 
 
                     if(ret < 0){
@@ -448,7 +439,7 @@ int main(void){
                         perror("Error while exec()");
                     }
 
-                    if(write(msgsock, "Failed.\n", strlen("Failed.\n"))< 0){
+                    if(write(pipeBetweenServerAndExecProcess[1], "Failed.\n", strlen("Failed.\n"))< 0){
                         perror("Error while piping message. ");
                     }
                 }
@@ -562,7 +553,7 @@ int main(void){
                 int processListIterator;        
                 if (instruction == "listall"){
                     processListIterator = 0;
-                    char temperoryList[bufferSize*10], List[bufferSize*10] = {};
+                    char temperoryList[10000], List[10000] = {};
                     tm startTime, endTime;
                     
                     while(processList[processListIterator].processId!= 0 ){
@@ -619,7 +610,7 @@ int main(void){
                 }
                 else{
                     processListIterator = 0;
-                    char temperoryList [500], List[500] = {};
+                    char temperoryList [10000], List[10000] = {};
                     while(processList[processListIterator].processId!= 0){
                         if(processList[processListIterator].active){
                             tm startTime = *localtime(&processList[processListIterator].startTime);                                               
