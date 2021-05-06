@@ -86,9 +86,15 @@ int main(int argc, char *argv[])
         while(keepRunning){
             char instruction[100], response[10000] = {};
             int ret;
+            char seperator [] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
             char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
-            char outputMessageForSyntax [] = "For arithmetic operations syntax example: add 1 2 ; . Add <space> ; in every command.\n";
-            char outputMessageForInput [] = "Enter your instruction: ";
+            char outputMessageForSyntax [] = "\n---------Syntax Examples-------\nadd 5 8 \nrun gedit\nkill 12345\nkill gedit\nlist\nlistall\nexit\n------------------------------\n";
+            char outputMessageForInput [] = "\nEnter your instruction: ";
+
+
+            if(write(STDOUT_FILENO, &seperator , strlen(seperator)) < 0){
+                perror("Error message 1. ");
+            }
 
             if(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)) < 0){
                 perror("Error message 1. ");
@@ -135,8 +141,12 @@ int main(int argc, char *argv[])
             if(write(STDOUT_FILENO, response, ret) < 0){
                 perror("Error message 7. ");
             }    
+
+            if(write(STDOUT_FILENO, &seperator , strlen(seperator)) < 0){
+                perror("Error message 1. ");
+            }
             
-            write(STDOUT_FILENO,"\n",1);
+            write(STDOUT_FILENO,"\n\n\n",3);
         }
 
 	  

@@ -18,7 +18,10 @@ using namespace std;
 
 
 /*
-  3)errors in lists: not adding to list
+  1)run  
+  3)exit
+  4) add processname to lists
+  
 
 */
 
@@ -243,15 +246,18 @@ int main(void){
 	}
 	printf("Socket has port #%d\n", ntohs(server.sin_port));
 	fflush(stdout);
-
+    
 	/* Start accepting connections */
 	listen(sock, 5);
+    
+
 	do {
 		msgsock = accept(sock, 0, 0);
 		if (msgsock == -1)
 			perror("accept");
 		
-        
+        int x = fork();
+        if (x==0){
         //Server process
         int listSize, bufferSize = 100;
         int ret;
@@ -279,7 +285,7 @@ int main(void){
                 perror("Error while reading from pipe b/w client & server.");
             }
 
-            write(1, "Request Recieved.\n",strlen("Request Recieved.\n"));
+            write(1, &recievedCommand,strlen(recievedCommand));
 
             instructionTokens = tokenizer(recievedCommand);
             instruction = (string) instructionTokens;
@@ -309,8 +315,8 @@ int main(void){
                         break;
                     }
 
-                    if (*instructionTokens == ';'){
-                        int sprinfReturn = sprintf(buffer, "ANSWER: %.2f\n", answer);
+                    if (*instructionTokens == '\n'){
+                        int sprinfReturn = sprintf(buffer, "Answer: %.2f\n", answer);
                         ret = write(msgsock,buffer,sprinfReturn);
                         if(ret < 0){
                             perror("Error message 8. ");
@@ -318,9 +324,6 @@ int main(void){
                         instructionTokens = strtok(NULL, " ");
                         answer = 0;
                     } 
-                    else if (*instructionTokens == '\n'){
-                        continue;
-                    }
                     else{
                         if (instruction == "add" ){
                             answer += atof(instructionTokens); 
@@ -375,8 +378,12 @@ int main(void){
 
             else if (instructionIsToRun(instruction)){   
                 char buffer [bufferSize];
-                int pipeBetweenServerAndExecProcess[2];
-                if (pipe2(pipeBetweenServerAndExecProcess, O_CLOEXEC) < 0){
+                int clientHandlerWrite[2];
+                int execProcessWrite [2];
+                if (pipe2(clientHandlerWrite, O_CLOEXEC) < 0){
+                    perror("Error in piping for exec ");
+                }
+                if (pipe2(execProcessWrite, O_CLOEXEC) < 0){
                     perror("Error in piping for exec ");
                 }
 
@@ -386,17 +393,26 @@ int main(void){
                 }
                 else if (isParentProcess(pId)){   
                     
+                    close(clientHandlerWrite[0]);
+                    close(execProcessWrite[1]);
+
                     instructionTokens = strtok(NULL, " \n");
-                    if(write(pipeBetweenServerAndExecProcess[1], instructionTokens, strlen(instructionTokens)) < 0){
+                    // for (size_t i = 0; i < strlen(instructionTokens); i++)
+                    // {
+                    //     cout << instructionTokens[i] <<endl;
+                    // }
+                    
+                    if(write(clientHandlerWrite[1], instructionTokens, strlen(instructionTokens)) < 0){
                         perror("Error while writing on execpipe. ");
                     }
 
                     sleep(1);
-                    close(pipeBetweenServerAndExecProcess[1]);
+                    close(clientHandlerWrite[1]);
                     
-                    ret = read(pipeBetweenServerAndExecProcess[0], buffer, bufferSize);
-                    if(ret <= 0){
-                        int listIterator = emptyIndexFinder(processList, listSize);
+                    ret = read(execProcessWrite[0], buffer, bufferSize);
+                    if(ret == 0){
+                        int listIterator = emptyIndexFinder(processList, 10000);
+                       
                         processList[listIterator].processId = pId;
                         char processName [strlen(instructionTokens)];
                         sprintf(processName, "%s", instructionTokens);
@@ -421,25 +437,25 @@ int main(void){
                 
                 else{
                     char application [bufferSize];
-                    char path[bufferSize] = {'/','u','s','r','/','b','i','n','/'};
-                    int ret = read(pipeBetweenServerAndExecProcess[0], application, bufferSize);
+                    
+                    close(clientHandlerWrite[1]);
+                    close(execProcessWrite[0]);
 
-                    close(pipeBetweenServerAndExecProcess[0]);
+                    int ret = read(clientHandlerWrite[0], application, bufferSize);
+
+                    
 
 
                     if(ret < 0){
                         perror("Error while reading filename. ");
                     }
-
-                    for (int index = 0; index < strlen(application); index++){
-                        path[9 + index] = application [index];
-                    }                
-
-                    if(execlp(path,path,NULL) < 0){
+                    
+                    
+                    if(execlp(application,application,(char *) NULL) < 0){
                         perror("Error while exec()");
-                    }
+                     }
 
-                    if(write(pipeBetweenServerAndExecProcess[1], "Failed.\n", strlen("Failed.\n"))< 0){
+                    if(write(execProcessWrite[1], "Failed.\n", strlen("Failed.\n"))< 0){
                         perror("Error while piping message. ");
                     }
                 }
@@ -497,7 +513,9 @@ int main(void){
                     
                     processFound = false;
                     string processName  = (string) instructionTokens;
-                    processListIterator = indexFinderByComparingNames(processList, processName, listSize);
+                   
+                    
+                    processListIterator = indexFinderByComparingNames(processList, processName, 10000);
                     if(processListIterator >= 0){
                         processFound =true;
                     }
@@ -550,10 +568,11 @@ int main(void){
 
 
             else if (instructionIsToDisplayList(instruction)){
-                int processListIterator;        
+                int processListIterator;      
+                long size = 1000000;  
                 if (instruction == "listall"){
                     processListIterator = 0;
-                    char temperoryList[10000], List[10000] = {};
+                    char temperoryList[size], List[size] = {};
                     tm startTime, endTime;
                     
                     while(processList[processListIterator].processId!= 0 ){
@@ -610,7 +629,7 @@ int main(void){
                 }
                 else{
                     processListIterator = 0;
-                    char temperoryList [10000], List[10000] = {};
+                    char temperoryList [size], List[size] = {};
                     while(processList[processListIterator].processId!= 0){
                         if(processList[processListIterator].active){
                             tm startTime = *localtime(&processList[processListIterator].startTime);                                               
@@ -651,6 +670,7 @@ int main(void){
             sleep(1);
         }
     
+    
 
 
 
@@ -658,7 +678,9 @@ int main(void){
 
 
 		close(msgsock);
+        }
 	} while (true);
+    
 	/*
 	 * Since this program has an infinite loop, the socket "sock" is
 	 * never explicitly closed.  However, all sockets will be closed
