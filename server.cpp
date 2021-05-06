@@ -20,7 +20,7 @@ using namespace std;
 /*
   1)run  
   3)exit
-  4) add processname to lists
+  4)add processname to lists
   
 
 */
@@ -451,7 +451,7 @@ int main(void){
                     }
                     
                     
-                    if(execlp(application,application,(char *) NULL) < 0){
+                    if(execlp(application,application, NULL) < 0){
                         perror("Error while exec()");
                      }
 
@@ -475,7 +475,7 @@ int main(void){
                 bool processFound = false;
                 
                 if (processIdIsGiven(processId)){
-                    processListIterator = indexFinderByComparingProcessId(processList, processId, listSize);
+                    processListIterator = indexFinderByComparingProcessId(processList, processId, 10000);
                     if(processListIterator >= 0){
                         processFound = true;
                     }
@@ -596,8 +596,8 @@ int main(void){
                             int elapsedSecond = endTimeSecond - startTimeSecond;
                             if(elapsedSecond<0){elapsedSecond*=-1;}
                             
-                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d hour %d min %d sec\n******************************************\n",
-                            processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond,elapsedHour,elapsedMinute,elapsedSecond);
+                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nProcess name: %s \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d hour %d min %d sec\n******************************************\n",
+                            processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond,elapsedHour,elapsedMinute,elapsedSecond);
                             strcat(List,temperoryList);
                                     
                         }
@@ -608,8 +608,8 @@ int main(void){
                             int startTimeSecond = startTime.tm_sec;
                             
 
-                            sprintf(temperoryList, "\n\n*************Process**************\nProcess id: %d  \nStarting time: %d hour %d min %d sec. \n*******************************************\n ",
-                            processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond);
+                            sprintf(temperoryList, "\n\n*************Process**************\nProcess id: %d  \nProcess name: %s \nStarting time: %d hour %d min %d sec. \n*******************************************\n ",
+                            processList[processListIterator].processId, processList[processListIterator].processName.c_str(),startTimeHour,startTimeMinute,startTimeSecond);
 
 
                             strcat(List,temperoryList);    
@@ -637,8 +637,8 @@ int main(void){
                             int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
                             
-                            sprintf(temperoryList, "\n*************Active Process**************\nProcess id: %d  \nStarting time: %d hour %d min %d sec. \n*******************************************\n ",
-                            processList[processListIterator].processId, startTimeHour,startTimeMinute,startTimeSecond);
+                            sprintf(temperoryList, "\n*************Active Process**************\nProcess id: %d  \nProcess name: %s \nStarting time: %d hour %d min %d sec. \n*******************************************\n ",
+                            processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
                                 
                             strcat(List,temperoryList);  
                         }
