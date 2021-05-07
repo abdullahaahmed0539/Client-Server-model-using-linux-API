@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 
             char * instructionToken = tokenizer(instruction);
             if(instructionIsToExit(instruction)){
-                exit(1);
+                exit(EXIT_SUCCESS);
             }
 
             char response[10000] = {};

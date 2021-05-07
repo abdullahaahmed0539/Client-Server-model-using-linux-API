@@ -75,7 +75,7 @@ char * tokenizer(char numberList []){
     return listToken;
 }
 
-bool instructionIsToExit(char instruction [], string instructionFromServer){
+bool instructionIsToExit(string instructionFromServer){
     if(instructionFromServer=="exit"){
         return true;
     }
@@ -570,8 +570,9 @@ int main(void){
 
 
 
-            else if (instructionIsToExit(instructionTokens ,instruction)){
-                exit(1);
+            else if (instructionIsToExit(instruction)){
+                exit(EXIT_SUCCESS);
+                
             }
 
 
