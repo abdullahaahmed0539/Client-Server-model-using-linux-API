@@ -20,9 +20,9 @@ using namespace std;
 /*
   1)run  
   3)exit
-  4)add processname to lists
+  2) threads
+  4) rest of the things
   
-
 */
 
 struct listProcess {
