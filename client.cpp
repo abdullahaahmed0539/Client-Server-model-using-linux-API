@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include <string.h>
 
-
 #include <errno.h>
 
 #include <iostream>
@@ -42,12 +41,14 @@ char * tokenizer(char numberList []){
     return listToken;
 }
 
-bool instructionIsToExit(char instruction [], string instructionFromServer){
-    if((instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t') || instructionFromServer=="exit"){
+bool instructionIsToExit(char instruction []){
+    if((instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t') ){
         return true;
     }
     return false;
 }
+
+
 
 int main(int argc, char *argv[])
 	{
@@ -84,8 +85,10 @@ int main(int argc, char *argv[])
         bool keepRunning = true;
         
         while(keepRunning){
-            char instruction[100], response[10000] = {};
+
+            char instruction[100] = {};
             int ret;
+           
             char seperator [] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
             char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
             char outputMessageForSyntax [] = "\n---------Syntax Examples-------\nadd 5 8 \nrun gedit\nkill 12345\nkill gedit\nlist\nlistall\nexit\n------------------------------\n";
@@ -117,36 +120,36 @@ int main(int argc, char *argv[])
             }
             
             
-
+            
 
             if(write(sock, instruction, ret) < 0){
                 perror("Error message 5. ");
             }
-
-
-           // sleep(1);
+            
 
 
             char * instructionToken = tokenizer(instruction);
-            if(instructionIsToExit(instruction,"")){
+            if(instructionIsToExit(instruction)){
                 exit(1);
             }
-            
+
+            char response[10000] = {};
+    
 
             ret = read (sock, response, 10000);
             if (ret < 0){
                 perror("Error message 6. ");
             }
-
+            
             if(write(STDOUT_FILENO, response, ret) < 0){
                 perror("Error message 7. ");
             }    
 
-            if(write(STDOUT_FILENO, &seperator , strlen(seperator)) < 0){
-                perror("Error message 1. ");
-            }
             
+                    
             write(STDOUT_FILENO,"\n\n\n",3);
+
+
         }
 
 	  

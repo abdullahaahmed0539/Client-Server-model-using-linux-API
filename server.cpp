@@ -21,6 +21,7 @@ using namespace std;
   1)run  
   3)exit
   2) threads
+  5) time
   4) rest of the things
   
 */
@@ -75,7 +76,7 @@ char * tokenizer(char numberList []){
 }
 
 bool instructionIsToExit(char instruction [], string instructionFromServer){
-    if((instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t') || instructionFromServer=="exit"){
+    if(instructionFromServer=="exit"){
         return true;
     }
     return false;
@@ -194,13 +195,13 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
 } 
 
 
-
-listProcess processList [10000];
+const int listSize = 20;
+listProcess processList [listSize];
 void handler(int sig){
     if(sig == SIGCHLD){
         int childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
         bool processFound;
-        int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, 10000);
+        int processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess, 20);
         if(processListIterator >= 0){
             processFound = true;
         }
@@ -259,7 +260,7 @@ int main(void){
         int x = fork();
         if (x==0){
         //Server process
-        int listSize, bufferSize = 100;
+        const int bufferSize = 50;
         int ret;
         bool keepRunning = true;
 
@@ -284,7 +285,7 @@ int main(void){
             if(ret < 0){
                 perror("Error while reading from pipe b/w client & server.");
             }
-
+        
             write(1, &recievedCommand,strlen(recievedCommand));
 
             instructionTokens = tokenizer(recievedCommand);
@@ -377,7 +378,7 @@ int main(void){
 
 
             else if (instructionIsToRun(instruction)){   
-                char buffer [bufferSize];
+                char buffer [bufferSize] = {};
                 int clientHandlerWrite[2];
                 int execProcessWrite [2];
                 if (pipe2(clientHandlerWrite, O_CLOEXEC) < 0){
@@ -397,21 +398,18 @@ int main(void){
                     close(execProcessWrite[1]);
 
                     instructionTokens = strtok(NULL, " \n");
-                    // for (size_t i = 0; i < strlen(instructionTokens); i++)
-                    // {
-                    //     cout << instructionTokens[i] <<endl;
-                    // }
+                  
                     
                     if(write(clientHandlerWrite[1], instructionTokens, strlen(instructionTokens)) < 0){
                         perror("Error while writing on execpipe. ");
                     }
 
-                    sleep(1);
+                    //sleep(1);
                     close(clientHandlerWrite[1]);
                     
                     ret = read(execProcessWrite[0], buffer, bufferSize);
                     if(ret == 0){
-                        int listIterator = emptyIndexFinder(processList, 10000);
+                        int listIterator = emptyIndexFinder(processList, listSize);
                        
                         processList[listIterator].processId = pId;
                         char processName [strlen(instructionTokens)];
@@ -432,33 +430,48 @@ int main(void){
                             perror("Error while piping message. ");
                         }
                     }
+                    close(execProcessWrite[0]);
                 }
                 
                 
                 else{
-                    char application [bufferSize];
+                    char temp [bufferSize];
                     
                     close(clientHandlerWrite[1]);
                     close(execProcessWrite[0]);
 
-                    int ret = read(clientHandlerWrite[0], application, bufferSize);
+                    int ret = read(clientHandlerWrite[0], temp, bufferSize);
+    
 
+                    char application[ret];
+                    for (size_t i = 0; i < ret; i++)
+                    {
+                        application[i] = temp[i];
+                        
+                    }
+                    application[ret] = '\0';
                     
-
+                    
+                
 
                     if(ret < 0){
                         perror("Error while reading filename. ");
                     }
                     
                     
-                    if(execlp(application,application, NULL) < 0){
+                    
+                    if(execlp(application, application, NULL) < 0){
                         perror("Error while exec()");
                      }
 
                     if(write(execProcessWrite[1], "Failed.\n", strlen("Failed.\n"))< 0){
                         perror("Error while piping message. ");
                     }
+
+                    close(clientHandlerWrite[0]);
+                    close(execProcessWrite[1]);
                 }
+                
             }
 
 
@@ -475,7 +488,7 @@ int main(void){
                 bool processFound = false;
                 
                 if (processIdIsGiven(processId)){
-                    processListIterator = indexFinderByComparingProcessId(processList, processId, 10000);
+                    processListIterator = indexFinderByComparingProcessId(processList, processId, 20);
                     if(processListIterator >= 0){
                         processFound = true;
                     }
@@ -515,7 +528,7 @@ int main(void){
                     string processName  = (string) instructionTokens;
                    
                     
-                    processListIterator = indexFinderByComparingNames(processList, processName, 10000);
+                    processListIterator = indexFinderByComparingNames(processList, processName, 20);
                     if(processListIterator >= 0){
                         processFound =true;
                     }
@@ -558,8 +571,7 @@ int main(void){
 
 
             else if (instructionIsToExit(instructionTokens ,instruction)){
-                exit(getpid());
-                sleep(1);
+                exit(1);
             }
 
 
@@ -569,7 +581,7 @@ int main(void){
 
             else if (instructionIsToDisplayList(instruction)){
                 int processListIterator;      
-                long size = 1000000;  
+                int size = bufferSize*bufferSize;  
                 if (instruction == "listall"){
                     processListIterator = 0;
                     char temperoryList[size], List[size] = {};
@@ -655,7 +667,7 @@ int main(void){
                         }
                     }    
                 }
-                sleep(1);
+              sleep(1);
             }
 
 
