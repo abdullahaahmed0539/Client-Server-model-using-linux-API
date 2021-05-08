@@ -18,8 +18,6 @@ using namespace std;
 
 
 /*
-  1)run  
-  3)exit
   2) threads
   5) time
   4) rest of the things
