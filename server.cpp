@@ -19,9 +19,14 @@ using namespace std;
 
 
 /*
-  5) time
+    cont: data reaching readfromcon thread. now you have to pass it to the thread with functionalities to print list wagera
+
+
+
+
   4) rest of the things
   6) if ch kills client should be notified
+  7) sef faault on exit on server
 */
 
 struct listProcess {
@@ -29,7 +34,7 @@ struct listProcess {
     string processName;
     time_t startTime;
     time_t endTime;
-    string elapsedTime;
+    time_t elapsedTime;
     bool active;
 };
 
@@ -192,6 +197,10 @@ bool processNameIsGiven(int returnValueOfAtoiFunction){
     return false;
 } 
 
+void checkWriteError(int number){
+    if (number < 0)
+        perror("Error while writing");
+}
 
 const int listSize = 20;
 listProcess processList [listSize];
@@ -214,68 +223,64 @@ void handler(int sig){
     }
 }
 
-
+int clientHandlerRead[2];
 void *readConnectionProcess (void* arg){
+    while(true){
     int clientHandlerRead = *(int *)arg;
     char c [100];
     int ret = read(clientHandlerRead, c, 100);
-    write(1,c,ret);
+    if(ret < 0){
+        perror ("Error while reading");
+    }
 
+
+
+
+    }
     return NULL;
 }
-
-
-
-
-
 
 
 void *clientHandler(void * arg){
     int msgsock = *(int *)arg;
     
-    int clientHandlerRead[2];
     if (pipe(clientHandlerRead) < 0){
             perror("Error in piping for exec ");
     }
+    
     int x = fork();
-        if(x>0){
-            write(clientHandlerRead[1], "h",1);
-        }
-        else if (x==0){
-        close(clientHandlerRead[1]);    
+    if(isParentProcess(x)){
+          
+    }
+    else if (isChildProcess(x)){
+    close(clientHandlerRead[1]);    
 
-        pthread_t readConn;
-        pthread_create(&readConn,NULL, readConnectionProcess, (void *)&clientHandlerRead[0]);
-
-
-        const int bufferSize = 50;
-        int ret;
-        bool keepRunning = true;
+    pthread_t readConn;
+    pthread_create(&readConn,NULL, readConnectionProcess, (void *)&clientHandlerRead[0]);
 
 
-        /*  
-            initialize process IDs to 0 since no process will
-            have id = 0
-        */
-        for (size_t index = 0; index < listSize; index++){
-             processList[index].processId = 0;
-        }
+    const int bufferSize = 50;
+    int ret;
+    bool keepRunning = true;
+
+    /*  
+        initialize process IDs to 0 since no process will
+        have id = 0
+    */
+    for (size_t index = 0; index < listSize; index++){
+         processList[index].processId = 0;
+    }
         
-
         while(keepRunning){
             char recievedCommand [bufferSize] = {};     
             char * instructionTokens;
             string instruction;
-
-
 
             ret = read(msgsock, recievedCommand, bufferSize);
             if(ret < 0){
                 perror("Error while reading from pipe b/w client & server.");
             }
         
-            write(1, &recievedCommand,strlen(recievedCommand));
-
             instructionTokens = tokenizer(recievedCommand);
             instruction = (string) instructionTokens;
             
@@ -289,19 +294,13 @@ void *clientHandler(void * arg){
                 while(numberListHasNotEnded(instructionTokens)){
 
                     if(!isListNumerical(instructionTokens)){
-                        ret = write(msgsock, "List is not numerical.\n", strlen("List is not numerical.\n"));
-                        if(ret < 0){
-                            perror("Error in list. ");
-                        }
+                        checkWriteError(write(msgsock, "List is not numerical.\n", strlen("List is not numerical.\n")));
                         break;
                     }
 
                     if (*instructionTokens == '\n'){
                         int sprinfReturn = sprintf(buffer, "Answer: %.2f\n", answer);
-                        ret = write(msgsock,buffer,sprinfReturn);
-                        if(ret < 0){
-                            perror("Error message 8. ");
-                        }
+                        checkWriteError(write(msgsock,buffer,sprinfReturn));
                         instructionTokens = strtok(NULL, " ");
                         answer = 0;
                     } 
@@ -336,26 +335,15 @@ void *clientHandler(void * arg){
                                 firstNumberFromTheNumberList = false;   
                             }
                             else{
-                                ret = write(msgsock ,"Can't divide by 0\n", strlen("Can't divide by 0\n"));
-                                if(ret < 0){
-                                    perror("Error message 8. ");
-                                 }
+                                checkWriteError(write(msgsock ,"Can't divide by 0\n", strlen("Can't divide by 0\n")));
                                 break;
                             } 
                         }
-                            
                             instructionTokens = strtok(NULL, " ");
-                        } 
-
+                    } 
                 }
                 sleep(1);
             }
-
-
-
-
-
-
 
             else if (instructionIsToRun(instruction)){   
                 char buffer [bufferSize] = {};
@@ -376,20 +364,12 @@ void *clientHandler(void * arg){
                     
                     close(clientHandlerWrite[0]);
                     close(execProcessWrite[1]);
-
                     instructionTokens = strtok(NULL, " \n");
-                  
-                    
-                    if(write(clientHandlerWrite[1], instructionTokens, strlen(instructionTokens)) < 0){
-                        perror("Error while writing on execpipe. ");
-                    }
-
+                    checkWriteError(write(clientHandlerWrite[1], instructionTokens, strlen(instructionTokens)));
                     close(clientHandlerWrite[1]);
-                    
                     ret = read(execProcessWrite[0], buffer, bufferSize);
                     if(ret == 0){
                         int listIterator = emptyIndexFinder(processList, listSize);
-                       
                         processList[listIterator].processId = pId;
                         char processName [strlen(instructionTokens)];
                         sprintf(processName, "%s", instructionTokens);
@@ -399,15 +379,10 @@ void *clientHandler(void * arg){
                         processList[listIterator].startTime = currentTime;
                         processList[listIterator].active = true;
 
-
-                        if(write(msgsock, "Opening Status: SUCCESS\n", strlen("Opening Status: Success\n")) < 0){
-                            perror("Error message 10. ");   
-                        }
+                        checkWriteError(write(msgsock, "Opening Status: SUCCESS\n", strlen("Opening Status: Success\n")));
                     }
                     else{
-                        if(write(msgsock, buffer, strlen(buffer)) < 0){
-                            perror("Error while piping message. ");
-                        }
+                        checkWriteError(write(msgsock, buffer, strlen(buffer)));
                     }
                     close(execProcessWrite[0]);
                 }
@@ -415,50 +390,29 @@ void *clientHandler(void * arg){
                 
                 else{
                     char temp [bufferSize];
-                    
                     close(clientHandlerWrite[1]);
                     close(execProcessWrite[0]);
-
                     int ret = read(clientHandlerWrite[0], temp, bufferSize);
-    
-
+                    if(ret < 0){
+                        perror("Error while reading filename. ");
+                    }
                     char application[ret];
                     for (size_t i = 0; i < ret; i++)
                     {
                         application[i] = temp[i];
-                        
                     }
                     application[ret] = '\0';
-                    
-                    
-                
-
-                    if(ret < 0){
-                        perror("Error while reading filename. ");
-                    }
-                    
-                    
                     
                     if(execlp(application, application, NULL) < 0){
                         perror("Error while exec()");
                      }
 
-                    if(write(execProcessWrite[1], "Opening Status: FAILED.\n", strlen("Opening Status: FAILED.\n"))< 0){
-                        perror("Error while piping message. ");
-                    }
-
+                    checkWriteError(write(execProcessWrite[1], "Opening Status: FAILED.\n", strlen("Opening Status: FAILED.\n")));
                     close(clientHandlerWrite[0]);
                     close(execProcessWrite[1]);
                 }
                 
             }
-
-
-
-
-
-
-
 
             else if (instructionIsToKillProcess(instruction)){
                 int status, processListIterator;
@@ -475,12 +429,10 @@ void *clientHandler(void * arg){
                     if (processFound){
                         ret = kill(processId, SIGTERM);
                         if (ret < 0){
-                            if(write(msgsock, "Problem in killing Process.\n",strlen("Problem in killing Process.\n")) < 0){
-                                perror("Error while piping. ");
-                            }
+                            checkWriteError(write(msgsock, "Problem in killing Process.\n",strlen("Problem in killing Process.\n")));
                         }
                         else{
-                            write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n"));                 
+                            checkWriteError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")));                 
                         }
 
                         status = 0; 
@@ -493,11 +445,10 @@ void *clientHandler(void * arg){
                         time_t currentTime; 
                         time(&currentTime);   
                         processList[processListIterator].endTime = currentTime;
-
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
                     else{
-                            write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n"));
+                            checkWriteError(write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n")));
                     }
 
                 }
@@ -515,13 +466,9 @@ void *clientHandler(void * arg){
                     if(processFound){
                         ret = kill(processList[processListIterator].processId, SIGTERM);
                         if (ret < 0){
-                            if(write(msgsock, "Process not killed.\n",strlen("process not killed.\n")) < 0){
-                                perror("Error while killing. ");
-                            }
+                            checkWriteError(write(msgsock, "Process not killed.\n",strlen("process not killed.\n")));
                         }else{
-                            if(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")) < 0){
-                                perror("Error while killing. ");
-                            };                 
+                            checkWriteError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")));
                         }
 
                         processList[processListIterator].active = false;
@@ -531,8 +478,7 @@ void *clientHandler(void * arg){
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
                     else{
-                        if(write(msgsock, "Process not killed as it doesnt exist.\n",strlen("process not killed as it doesnt exist.\n")) < 0)
-                            perror("Error while piping. ");
+                        checkWriteError(write(msgsock, "Process not killed as it doesnt exist.\n",strlen("process not killed as it doesnt exist.\n")));
                     }
                 }
                 else {
@@ -541,23 +487,9 @@ void *clientHandler(void * arg){
                 sleep(1);
             }
 
-
-
-
-
-
-
-
-
             else if (instructionIsToExit(instruction)){
                 exit(EXIT_SUCCESS);
-                
             }
-
-
-
-
-
 
             else if (instructionIsToDisplayList(instruction)){
                 int processListIterator;      
@@ -565,12 +497,13 @@ void *clientHandler(void * arg){
                 if (instruction == "listall"){
                     processListIterator = 0;
                     char temperoryList[size], List[size] = {};
-                    tm startTime, endTime;
+                    tm startTime, endTime, elTime;
                     
                     while(processList[processListIterator].processId!= 0 ){
                         if(!processList[processListIterator].active){
                             startTime = *localtime(&processList[processListIterator].startTime);
                             endTime = *localtime(&processList[processListIterator].endTime);
+                            elTime = *localtime(&processList[processListIterator].elapsedTime);
 
                             int startTimeHour = startTime.tm_hour;
                             int startTimeMinute = startTime.tm_min;
@@ -580,16 +513,13 @@ void *clientHandler(void * arg){
                             int endTimeMinute = endTime.tm_min;
                             int endTimeSecond = endTime.tm_sec;
 
-                        
-                            int elapsedHour = endTimeHour - startTimeHour;
-                            if(elapsedHour<0){elapsedHour*=-1;}
-                            int elapsedMinute = endTimeMinute - startTimeMinute;
-                            if(elapsedMinute<0){elapsedMinute*=-1;}
-                            int elapsedSecond = endTimeSecond - startTimeSecond;
-                            if(elapsedSecond<0){elapsedSecond*=-1;}
+                            int elHour = elTime.tm_hour;
+                            int elMinute = elTime.tm_min;
+                            int elSecond = elTime.tm_sec;
+
                             
-                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nProcess name: %s \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d hour %d min %d sec\n*************************************************\n",
-                            processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond,elapsedHour,elapsedMinute,elapsedSecond);
+                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nProcess name: %s \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d min %d sec\n*************************************************\n",
+                            processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond, elMinute,elSecond);
                             strcat(List,temperoryList);
                                     
                         }
@@ -611,12 +541,10 @@ void *clientHandler(void * arg){
                         processListIterator++;
                     }
                     if(strlen(List) <= 0){
-                        if(write(msgsock,"No processes.\n",strlen("No active processes.\n")) < 0){
-                            perror("Error message 11. ");
-                        }
+                        checkWriteError(write(msgsock,"No processes.\n",strlen("No active processes.\n")));
                     }
-                    else if(write(msgsock,List,strlen(List)) < 0){
-                        perror("Error:");
+                    else {
+                        checkWriteError(write(msgsock,List,strlen(List)));
                     }
                 }
                 else{
@@ -637,71 +565,83 @@ void *clientHandler(void * arg){
                         processListIterator++;
                     }
                     if(strlen(List) <= 0){
-                        if(write(msgsock,"No active processes.\n",strlen("No active processes.\n")) < 0){
-                            perror("Error message 11. ");
-                        }
+                        checkWriteError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")));
                     }
                     else{
-                        if(write(msgsock,List,strlen(List)) < 0){
-                            perror("Error message 12. ");
-                        }
+                        checkWriteError(write(msgsock,List,strlen(List)));
                     }    
                 }
               sleep(1);
             }
 
-
-
-
-
             else{
-                if(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")) < 0){
-                    perror("Error while piping message. ");
-                }
+                checkWriteError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")));
             }
             sleep(1);
         }
-    
-    
-
-
-
-
-
-
 		close(msgsock);
-        
-        
+
         }
 
     return NULL;
 }
 
-
-
-
-
 void *superUser(void *arg){
+    int superUserWrite[2];
+    int superUserRead[2];
 
-    char bf [20];
-    write(1, "any command\n",strlen("any command\n"));
-    int r  = read (STDIN_FILENO,bf,20);
-    write(1,bf,r);
+    if (pipe(superUserWrite) < 0){
+            perror("Error in piping for exec ");
+    }
+    if (pipe(superUserRead) < 0){
+            perror("Error in piping for exec ");
+    }
+
+    int s_id = fork();
+    if(s_id < 0){
+        perror("Error while forking for super User.");
+    }else if (isChildProcess(s_id)){
+        while(true){
+            close(superUserWrite[0]);
+            close(superUserRead[1]);
+            char outputMessageForInstruction [] = "You have the following commands: print, print client, list, list client, exit.\n" ;
+            char outputMessageForInput [] = "Enter your instruction: ";
+            char instruction[20]={};
+            
+            checkWriteError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)));
+            
+            checkWriteError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)));
+
+            int ret = read(STDIN_FILENO, instruction, 20); 
+            if(ret < 0){
+                perror("Error message 4. ");
+            }
+
+            checkWriteError(write(superUserWrite[1],instruction,strlen(instruction)));
+        }   
+
+    }else{
+        while(true){
+            char instruction[20]={};
+            int ret = read(superUserWrite[0], instruction, 20); 
+            if(ret < 0){
+                perror("Error message 4. ");
+            }
+            checkWriteError(write(clientHandlerRead[1], instruction, ret));
+        }
+    }
 
     return NULL;
 }
 
-
-
-
-
-
-
-
-
 int main(void){
     signal(SIGCHLD, handler);
-	int sock, length;
+
+    pthread_t superUserThread, clientHandlerThread;
+    pthread_create(&superUserThread, NULL, superUser,NULL);
+    pthread_detach(superUserThread);
+    
+    int sock, length;
 	struct sockaddr_in server;
 	int msgsock;
 	char buf[1024];
@@ -733,32 +673,14 @@ int main(void){
     
 	/* Start accepting connections */
 	listen(sock, 10);
-    
-    
 
 	do {
 		msgsock = accept(sock, 0, 0);
 		if (msgsock == -1)
 			perror("accept");
 		
-       
-        
-        //insert fork
-
-        pthread_t clientHandlerThread, superUserThread;
-
         pthread_create(&clientHandlerThread, NULL, clientHandler,(void*)&msgsock);
         pthread_detach(clientHandlerThread);
 
-        pthread_create(&superUserThread, NULL, superUser,NULL);
-        pthread_detach(superUserThread);
-
-
 	} while (true);
-    
-	/*
-	 * Since this program has an infinite loop, the socket "sock" is
-	 * never explicitly closed.  However, all sockets will be closed
-	 * automatically when a process is killed or terminates normally. 
-	 */
 }

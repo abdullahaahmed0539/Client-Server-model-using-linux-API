@@ -47,6 +47,11 @@ bool instructionIsToExit(char instruction [], string instructionFromServer){
     return false;
 }
 
+void checkWriteError(int number){
+    if (number < 0)
+        perror("Error while writing");
+}
+
 void* inputFunction(void *args){
     int sock = *(int *)args;
     char instruction[size]={};
@@ -56,45 +61,21 @@ void* inputFunction(void *args){
     char outputMessageForSyntax [] = "\n---------Syntax Examples-------\nadd 5 8 \nrun gedit\nkill 12345\nkill gedit\nlist\nlistall\nexit\n------------------------------\n";
     char outputMessageForInput [] = "\nEnter your instruction: ";
 
-
-    if(write(STDOUT_FILENO, &seperator , strlen(seperator)) < 0){
-        perror("Error message 1. ");
-    }
-
-    if(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)) < 0){
-        perror("Error message 1. ");
-    }
-
-    if (write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax))< 0){
-        perror("Error message 2. ");             
-    }
-
-    if(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)) < 0){
-        perror("Error message 3. "); 
-    }
-
-
+    checkWriteError(write(STDOUT_FILENO, &seperator , strlen(seperator)));
+    checkWriteError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)));
+    checkWriteError(write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax)));
+    checkWriteError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)));
     ret = read(STDIN_FILENO, instruction, 100); 
     if(ret < 0){
         perror("Error message 4. ");
     }
-   
-
-    if(write(sock, instruction, ret) < 0){
-        perror("Error message 5. ");
-    }
-
-
+    checkWriteError(write(sock, instruction, ret));
     char * instructionToken = tokenizer(instruction);
     if(instructionIsToExit(instruction,"")){
         exit(EXIT_SUCCESS);
     }
-    
-
     return NULL;
 }
-
-
 
 int main(int argc, char *argv[])
 	{
@@ -104,7 +85,7 @@ int main(int argc, char *argv[])
 	char buf[1024];
 
 	/* Create socket */
-	sock = socket(AF_INET, SOCK_STREAM, 0);
+	sock = socket(AF_INET, SOCK_STREAM , 0);
 	if (sock < 0) {
 		perror("opening stream socket");
 		exit(1);
@@ -135,29 +116,15 @@ int main(int argc, char *argv[])
             pthread_t outputThread;
             pthread_create(&outputThread, NULL, inputFunction, (void *)&sock);
             pthread_detach(outputThread);
-
             char response[size * size] = {};
 
             int ret = read (sock, response, (size*size));
             if (ret < 0){
                 perror("Error message 6. ");
             }
-
-            if(write(STDOUT_FILENO, response, ret) < 0){
-                perror("Error message 7. ");
-            }    
-
-           
-            write(STDOUT_FILENO,"\n\n\n",3);
-            
-            
-            
-            
-        }
-
-	  
-
-	  
+            checkWriteError(write(STDOUT_FILENO, response, ret));
+            checkWriteError(write(STDOUT_FILENO,"\n\n\n",3));
+        }  
 	}
 	close(sock);
 }
