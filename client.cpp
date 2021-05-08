@@ -26,14 +26,15 @@
 using namespace std;
 
 
-#define DATA "Half a league, half a league . . ."
-
 /*
  * This program creates a socket and initiates a connection with the socket
  * given in the command line.  One message is sent over the connection and
  * then the socket is closed, ending the connection. The form of the command
  * line is streamwrite hostname portnumber 
  */
+int size = 100;
+
+
 char * tokenizer(char numberList []){
     char * listToken = strtok(numberList, " \n");  
     return listToken;
@@ -48,7 +49,7 @@ bool instructionIsToExit(char instruction [], string instructionFromServer){
 
 void* inputFunction(void *args){
     int sock = *(int *)args;
-    char instruction[100]={};
+    char instruction[size]={};
     int ret;
     char seperator [] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
     char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
@@ -135,9 +136,9 @@ int main(int argc, char *argv[])
             pthread_create(&outputThread, NULL, inputFunction, (void *)&sock);
             pthread_detach(outputThread);
 
-            char response[10000] = {};
+            char response[size * size] = {};
 
-            int ret = read (sock, response, 10000);
+            int ret = read (sock, response, (size*size));
             if (ret < 0){
                 perror("Error message 6. ");
             }
