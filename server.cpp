@@ -215,7 +215,14 @@ void handler(int sig){
 }
 
 
+void *readConnectionProcess (void* arg){
+    int clientHandlerRead = *(int *)arg;
+    char c [100];
+    int ret = read(clientHandlerRead, c, 100);
+    write(1,c,ret);
 
+    return NULL;
+}
 
 
 
@@ -226,11 +233,21 @@ void handler(int sig){
 void *clientHandler(void * arg){
     int msgsock = *(int *)arg;
     
+    int clientHandlerRead[2];
+    if (pipe(clientHandlerRead) < 0){
+            perror("Error in piping for exec ");
+    }
     int x = fork();
+        if(x>0){
+            write(clientHandlerRead[1], "h",1);
+        }
+        else if (x==0){
+        close(clientHandlerRead[1]);    
 
-        if (x==0){
-            
-        //Server process
+        pthread_t readConn;
+        pthread_create(&readConn,NULL, readConnectionProcess, (void *)&clientHandlerRead[0]);
+
+
         const int bufferSize = 50;
         int ret;
         bool keepRunning = true;
@@ -664,6 +681,20 @@ void *clientHandler(void * arg){
 
 
 
+void *superUser(void *arg){
+
+    char bf [20];
+    write(1, "any command\n",strlen("any command\n"));
+    int r  = read (STDIN_FILENO,bf,20);
+    write(1,bf,r);
+
+    return NULL;
+}
+
+
+
+
+
 
 
 
@@ -714,10 +745,13 @@ int main(void){
         
         //insert fork
 
-        pthread_t ch;
-        pthread_create(&ch, NULL, clientHandler,(void*)&msgsock);
-        pthread_detach(ch);
+        pthread_t clientHandlerThread, superUserThread;
 
+        pthread_create(&clientHandlerThread, NULL, clientHandler,(void*)&msgsock);
+        pthread_detach(clientHandlerThread);
+
+        pthread_create(&superUserThread, NULL, superUser,NULL);
+        pthread_detach(superUserThread);
 
 
 	} while (true);
