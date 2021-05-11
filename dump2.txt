@@ -19,7 +19,7 @@ using namespace std;
 
 
 /*
-
+    cont: data reaching readfromcon thread. now you have to pass it to the thread with functionalities to print list wagera
 
 
 
@@ -35,10 +35,6 @@ struct listProcess {
     time_t endTime;
     time_t elapsedTime;
     bool active;
-};
-struct activeList {
-    int clientId;
-    string list;
 };
 
 bool characterIsNumerical (char character){
@@ -116,13 +112,6 @@ bool instructionIsToDisplayList(string instruction){
     return false;
 }
 
-bool instructionIsToShowOnlyOneClientList (string instruction){
-    if(instruction == "List"){
-        return true;
-    }
-    return false;
-}
-
 bool numberListHasNotEnded (char * instructionTokens){
     if(instructionTokens==NULL){
         return false;
@@ -144,20 +133,6 @@ int emptyIndexFinder(listProcess processList[], int listSize){
             listIterator++;
         }
         else{
-            break;
-        }
-    }
-    return listIterator;
-}
-
-int assignClientID(activeList active[], int listSize){
-    int listIterator = 0;
-    while(listIterator < listSize){
-        if(active[listIterator].clientId != -1){
-            listIterator++;
-        }
-        else{
-            active[listIterator].clientId = listIterator;
             break;
         }
     }
@@ -238,7 +213,6 @@ void createPipe(int p []){
 const int listSize = 20;
 listProcess processList [listSize];
 int clientHandlerRead[2];
-activeList active [10];
 
 
 void handler(int sig){
@@ -262,19 +236,64 @@ void handler(int sig){
 
 
 
+void *serverInstructionThread (void* arg){
+    while(true){
+        char instr [20] = {};
+        int ret = read(clientHandlerRead[0], instr, 20);
+        if(ret < 0){
+            perror ("Error while reading");
+        }
+        char *instructionTokens = tokenizer(instr);
+        string command = (string) instructionTokens;
+        
+
+        if (instructionIsToDisplayList(command)){
+            
+            int processListIterator = 0;      
+            int size = 100000;
+            char temperoryList [size], List[size] = {};
+            while(processList[processListIterator].processId!= 0){
+                if(processList[processListIterator].active){
+                    tm startTime = *localtime(&processList[processListIterator].startTime);                                               
+                    int startTimeHour = startTime.tm_hour;
+                    int startTimeMinute = startTime.tm_min;
+                    int startTimeSecond = startTime.tm_sec;
+                                                
+                    sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d hour %d min %d sec. \n***********************************\n ",
+                    processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
+                                                    
+                    strcat(List,temperoryList);  
+                }
+            processListIterator++;
+            }
+            if(strlen(List) <= 0){
+                checkWriteError(write(STDOUT_FILENO,"No active processes.\n",strlen("No active processes.\n")));
+            }
+            else{
+                checkWriteError(write(STDOUT_FILENO,List,strlen(List)));
+            } 
+            
+            
+        }
+
+        
+    }
+    return NULL;
+}
 
 
 void *clientHandler(void * arg){
     int msgsock = *(int *)arg;
-    int clientHandlerWrite [2];
-    createPipe(clientHandlerWrite);
-    int clientId = assignClientID(active,10);
-    int clientHandlerId = fork();
-    if (isChildProcess(clientHandlerId)){
-        close(clientHandlerRead[1]);
-        close(clientHandlerWrite[0]);
+    int clientHandler_id = fork();
+    if (isChildProcess(clientHandler_id)){
 
+        close(clientHandlerRead[1]);    
+
+        pthread_t readConn;
         char superUserCommand [100]={};
+        pthread_create(&readConn,NULL, serverInstructionThread, NULL);
+        pthread_detach(readConn);
+
         const int bufferSize = 50;
         int ret;
         bool keepRunning = true;
@@ -508,13 +527,10 @@ void *clientHandler(void * arg){
                 exit(EXIT_SUCCESS);
             }
 
-            else if (instructionIsToDisplayList(instruction)){
+            else if (instructionIsToDisplayList(instruction) ){
                 int processListIterator;      
-                int size = bufferSize*bufferSize;
-                instructionTokens = strtok(NULL, " /n");
-                string param =   (string) instructionTokens;
-
-                if (param.compare("all\n") == 0){
+                int size = bufferSize*bufferSize;  
+                if (instruction == "listall"){
                     processListIterator = 0;
                     char temperoryList[size], List[size] = {};
                     tm startTime, endTime, elTime;
@@ -561,13 +577,13 @@ void *clientHandler(void * arg){
                         processListIterator++;
                     }
                     if(strlen(List) <= 0){
-                        checkWriteError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")));
+                        checkWriteError(write(msgsock,"No processes.\n",strlen("No active processes.\n")));
                     }
                     else {
                         checkWriteError(write(msgsock,List,strlen(List)));
                     }
                 }
-                else if (param.compare("active\n")==0){
+                else{
                     processListIterator = 0;
                     char temperoryList [size], List[size] = {};
                     while(processList[processListIterator].processId!= 0){
@@ -584,18 +600,12 @@ void *clientHandler(void * arg){
                         }
                         processListIterator++;
                     }
-                    checkWriteError(write(clientHandlerWrite[1], &clientId,sizeof(clientId)));
                     if(strlen(List) <= 0){
-                        checkWriteError(write(clientHandlerWrite[1], "No processes.\n",strlen("No active processes.\n")));
                         checkWriteError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")));
                     }
                     else{
-                        checkWriteError(write(clientHandlerWrite[1],List,strlen(List)));
                         checkWriteError(write(msgsock,List,strlen(List)));
                     }    
-                }
-                else{
-                    checkWriteError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")));
                 }
               sleep(1);
             }
@@ -607,24 +617,7 @@ void *clientHandler(void * arg){
         }
 		close(msgsock);
 
-        }
-        else if (isParentProcess(clientHandlerId)){
-            close(clientHandlerWrite[1]);
-            while(true){
-            char temp [1000000] = {};
-            int id;
-            int ret1 = read(clientHandlerWrite[0], &id, sizeof(int));
-            int ret2 = read(clientHandlerWrite[0], temp, sizeof(temp));
-            char buff [ret2] = {};
-            for (size_t i = 0; i < ret2; i++){
-                buff[i] = temp[i];
-            }
-            buff[ret2] = '\0';
-            active[id].list = (string) buff;
-            }
-
-
-        }else{
+        }else if (clientHandler_id < 0){
             perror("Error while forking");
         }
 
@@ -633,13 +626,15 @@ void *clientHandler(void * arg){
 }
 
 void *superUser(void *arg){
-        int superUserWrite[2];
+        int superUserWrite[2], superUserRead[2];
         createPipe(superUserWrite);
+        createPipe(superUserRead);
         int s_id = fork();
         if (s_id < 0 ){
             perror("Error while forking");
         }
         else if (isChildProcess(s_id)){
+            close(superUserRead[1]);
             close(superUserWrite[0]);
             while(true){
                 char outputMessageForInstruction [] = "You have the following commands: print, print client, list, list client, exit.\n" ;
@@ -657,6 +652,7 @@ void *superUser(void *arg){
             }
         }
         else{
+            close(superUserRead[0]);
             close(superUserWrite[1]);
             char instr[20]={};
             while(true){
@@ -664,76 +660,9 @@ void *superUser(void *arg){
                 if(ret < 0){
                     perror("Error message 4. ");
                 }
-                char * tok = tokenizer(instr);
-                string command = (string) tok;
-
-
-                if (instructionIsToDisplayList(command)){
-                        tok = strtok(NULL, " \n");
-                        string command = (string) tok;
-
-                        if(command.compare("all") == 0){
-                            int count = 0;
-                            while(active[count].clientId != -1){  
-                                int n = active[count].list.length();
-                                char char_array[n + 1],  id [sizeof(int)];
-                                strcpy(char_array, active[count].list.c_str());
-                                sprintf(id, "%d", active[count].clientId);
-                                checkWriteError(write(STDOUT_FILENO, "\n",1 ));
-                                checkWriteError(write(STDOUT_FILENO, "Client ID :", strlen("Client ID :")));
-                                checkWriteError(write(STDOUT_FILENO, id, strlen(id)));
-                                checkWriteError(write(STDOUT_FILENO, char_array , strlen(char_array)));
-                                checkWriteError(write(STDOUT_FILENO, "\n",1 ));
-                                count++;
-                            }
-                        }
-                        else{
-                            int clientID;
-                            bool correctInput = true;
-                            if (command.compare("0") == 0){
-                                clientID = 0;
-                            }else{
-                                clientID = atoi(tok);
-                                if(clientID == 0){
-                                    perror("Error in atoi");
-                                    correctInput = false;
-                                }
-                            }
-
-                            if(active[clientID].clientId == -1){
-                                correctInput = false;
-                            }
-
-                            if(correctInput){
-                                int count = 0;
-                                while(count != clientID){
-                                    count++;
-                                }
-                                int n = active[count].list.length();
-                                char char_array[n + 1], id [sizeof(int)];
-                                sprintf(id, "%d", active[count].clientId);
-                                strcpy(char_array, active[count].list.c_str());
-                                checkWriteError(write(STDOUT_FILENO, "\n",1 ));
-                                checkWriteError(write(STDOUT_FILENO, "Client ID :", strlen("Client ID :")));
-                                checkWriteError(write(STDOUT_FILENO, id, strlen(id)));
-                               
-                                checkWriteError(write(STDOUT_FILENO, char_array , strlen(char_array)));
-                                checkWriteError(write(STDOUT_FILENO, "\n",1 ));
-
-                                correctInput = false;
-                            }
-                            else{
-                                checkWriteError(write(STDOUT_FILENO, "Incorrect client ID.\n\n",strlen("Incorrect client ID.\n\n")));
-                            }
-
-
-
-                        }
-                       
-                }   
+                checkWriteError(write(clientHandlerRead[1],instr,strlen(instr)));
             }
         }
-    
 
  
     return NULL;
@@ -742,15 +671,6 @@ void *superUser(void *arg){
 int main(void){
     signal(SIGCHLD, handler);
     createPipe(clientHandlerRead);
-
-    /*  
-            initialize client IDs to 0 since no process will
-            have id = 0
-        */
-    for (size_t index = 0; index < 10; index++){
-        active[index].clientId = -1;
-    }
-
     pthread_t superUserThread, clientHandlerThread;
     pthread_create(&superUserThread, NULL, superUser, NULL);
     pthread_detach(superUserThread);
