@@ -1,11 +1,3 @@
-/*
- Copyright (c) 1986 Regents of the University of California.
- All rights reserved.  The Berkeley software License Agreement
- specifies the terms and conditions for redistribution.
-
-	@(#)streamwrite.c	6.2 (Berkeley) 5/8/86
-*/
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -22,58 +14,61 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <pthread.h>
-
 using namespace std;
 
+#define PRINT_ERROR_MESSAGE "Error in printing."
+#define READ_ERROR_MESSAGE "Error in reading."
+#define SOCKET_ERROR_MESSAGE "Error in printing."
+#define size 100
 
-/*
- * This program creates a socket and initiates a connection with the socket
- * given in the command line.  One message is sent over the connection and
- * then the socket is closed, ending the connection. The form of the command
- * line is streamwrite hostname portnumber 
- */
-int size = 100;
-
-
-char * tokenizer(char numberList []){
+char* tokenizer(char numberList []){
     char * listToken = strtok(numberList, " \n");  
     return listToken;
 }
 
-bool instructionIsToExit(char instruction [], string instructionFromServer){
-    if((instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t') || instructionFromServer=="exit"){
-        return true;
+void checkError(int number, string msg){
+    int n = msg.length();
+    char message[n + 1],  id [sizeof(int)];
+    strcpy(message, msg.c_str());
+    if (number < 0){
+        perror("Error");
+        write(STDOUT_FILENO, message, strlen(message));
     }
+}
+
+bool instructionIsToExit(char instruction []){
+    if((instruction[0]=='e' && instruction[1]=='x' && instruction[2]=='i' && instruction[3]=='t'))
+        return true;
     return false;
 }
 
-void checkWriteError(int number){
-    if (number < 0)
-        perror("Error while writing");
-}
-
-void* inputFunction(void *args){
-    int sock = *(int *)args;
-    char instruction[size]={};
-    int ret;
+void printInstructions(){
     char seperator [] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
     char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
     char outputMessageForSyntax [] = "\n---------Syntax Examples-------\nadd 5 8 \nrun gedit\nkill 12345\nkill gedit\nlist\nlistall\nexit\n------------------------------\n";
     char outputMessageForInput [] = "\nEnter your instruction: ";
 
-    checkWriteError(write(STDOUT_FILENO, &seperator , strlen(seperator)));
-    checkWriteError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)));
-    checkWriteError(write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax)));
-    checkWriteError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)));
-    ret = read(STDIN_FILENO, instruction, 100); 
-    if(ret < 0){
-        perror("Error message 4. ");
-    }
-    checkWriteError(write(sock, instruction, ret));
-    char * instructionToken = tokenizer(instruction);
-    if(instructionIsToExit(instruction,"")){
+    checkError(write(STDOUT_FILENO, &seperator , strlen(seperator)), PRINT_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)), PRINT_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax)), PRINT_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)), PRINT_ERROR_MESSAGE);
+} 
+
+void displayOutput(char * response, int ret){
+    checkError(write(STDOUT_FILENO, response, ret), PRINT_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO,"\n\n\n",3), PRINT_ERROR_MESSAGE);
+}
+
+void* userReadFunction(void *args){
+    int sock = *(int *)args;
+    char instruction[size]={};
+    int ret;
+
+    printInstructions();
+    checkError(ret = read(STDIN_FILENO, instruction, size), READ_ERROR_MESSAGE);
+    checkError(write(sock, instruction, ret), SOCKET_ERROR_MESSAGE);
+    if(instructionIsToExit(instruction))
         exit(EXIT_SUCCESS);
-    }
     return NULL;
 }
 
@@ -106,24 +101,17 @@ int main(int argc, char *argv[])
 		perror("connecting stream socket");
 		exit(1);
 	}
+
 	while(1) {
-
-
         bool keepRunning = true;
-        
+        int ret;
         while(keepRunning){
-
-            pthread_t outputThread;
-            pthread_create(&outputThread, NULL, inputFunction, (void *)&sock);
-            pthread_detach(outputThread);
             char response[size * size] = {};
-
-            int ret = read (sock, response, (size*size));
-            if (ret < 0){
-                perror("Error message 6. ");
-            }
-            checkWriteError(write(STDOUT_FILENO, response, ret));
-            checkWriteError(write(STDOUT_FILENO,"\n\n\n",3));
+            pthread_t outputThread;
+            pthread_create(&outputThread, NULL, userReadFunction, (void *)&sock);
+            pthread_detach(outputThread);
+            checkError(ret = read (sock, response, (size*size)), READ_ERROR_MESSAGE);
+            displayOutput(response, ret);
         }  
 	}
 	close(sock);
