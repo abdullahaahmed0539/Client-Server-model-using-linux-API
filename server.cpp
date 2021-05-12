@@ -226,6 +226,11 @@ void checkWriteError(int number){
         perror("Error while writing");
 }
 
+void checkReadError(int number){
+    if (number < 0)
+        perror("Error while Reading");
+}
+
 void createPipe(int p []){
     if(pipe(p) < 0){
         perror("Error in pipe");
@@ -465,7 +470,7 @@ void *clientHandler(void * arg){
                         processList[processListIterator].elapsedTime = difftime(processList[processListIterator].endTime,processList[processListIterator].startTime);
                     }
                     else{
-                            checkWriteError(write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n")));
+                        checkWriteError(write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n")));
                     }
 
                 }
@@ -538,19 +543,19 @@ void *clientHandler(void * arg){
                             int elSecond = elTime.tm_sec;
 
                             
-                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nProcess name: %s \nStarting time: %d hour %d min %d sec \nEnding time: %d hour %d min %d sec \nElapsed time: %d min %d sec\n*************************************************\n",
+                            sprintf(temperoryList, "\n*********************Process*********************\nProcess id: %d \nProcess name: %s \nStarting time: %d:%d:%d  \nEnding time: %d:%d:%d  \nElapsed time: %d min %d sec\n*************************************************\n",
                             processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond,endTimeHour,endTimeMinute,endTimeSecond, elMinute,elSecond);
                             strcat(List,temperoryList);
                                     
                         }
                         else{
-                            tm startTime = *localtime(&processList[processListIterator].startTime);    
+                            tm startTime = *localtime(&processList[processListIterator].startTime); 
                             int startTimeHour = startTime.tm_hour;
                             int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
                             
 
-                            sprintf(temperoryList, "\n\n*************Process*******************\nProcess id: %d  \nProcess name: %s \nStarting time: %d hour %d min %d sec. \n************************************\n ",
+                            sprintf(temperoryList, "\n\n*************Process*******************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n************************************\n ",
                             processList[processListIterator].processId, processList[processListIterator].processName.c_str(),startTimeHour,startTimeMinute,startTimeSecond);
 
 
@@ -577,7 +582,7 @@ void *clientHandler(void * arg){
                             int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
                             
-                            sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d hour %d min %d sec. \n***********************************\n ",
+                            sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n***********************************\n ",
                             processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
                                 
                             strcat(List,temperoryList);  
@@ -716,10 +721,8 @@ void *superUser(void *arg){
                                 checkWriteError(write(STDOUT_FILENO, "\n",1 ));
                                 checkWriteError(write(STDOUT_FILENO, "Client ID :", strlen("Client ID :")));
                                 checkWriteError(write(STDOUT_FILENO, id, strlen(id)));
-                               
                                 checkWriteError(write(STDOUT_FILENO, char_array , strlen(char_array)));
                                 checkWriteError(write(STDOUT_FILENO, "\n",1 ));
-
                                 correctInput = false;
                             }
                             else{
@@ -771,7 +774,7 @@ int main(void){
 	/* Name socket using wildcards */
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = 0;
+	server.sin_port = htons(10000);
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server))) {
 		perror("binding stream socket");
 		exit(1);
