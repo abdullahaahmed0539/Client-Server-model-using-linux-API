@@ -20,6 +20,11 @@ using namespace std;
 #define LIST_SIZE 20
 #define BUFF_SIZE 50
 #define SIZE 2500
+#define WRITE_ERROR_MESSAGE "Error in write."
+#define READ_ERROR_MESSAGE "Error in read."
+#define SOCKET_ERROR_MESSAGE "Error in socket."
+#define PIPE_ERROR_MESSAGE "Error in pipe."
+#define FORK_ERROR_MESSAGE "Error in fork."
 
 
 //STRUCTS
@@ -31,7 +36,7 @@ struct listProcess {
 };
 
 struct activeList {
-    int clientId, socket;
+    int clientId, socket, pipeWrite;
     string list;
 };
 
@@ -39,6 +44,7 @@ struct activeList {
 //GLOBAL DECLARATIONS
 listProcess processList [LIST_SIZE];
 activeList active [LIST_SIZE];
+int clientId;
 
 bool characterIsNumerical (char character){
     if(character >= '0' && character <= '9' )
@@ -139,11 +145,27 @@ int assignClientID(){
     return listIterator;
 }
 
+int emptyIndexFinder(){
+    int listIterator = 0;
+    bool foundProcess;
+    while(listIterator < LIST_SIZE){
+        if(processList[listIterator].processId == 0){
+            foundProcess = true;
+            break;
+        }
+        listIterator++;
+    }
+    if(!foundProcess){
+        listIterator*=-1;
+    }
+    return listIterator;
+}
+
 int indexFinderByComparingProcessId(int requiredProcessId){
     int listIterator = 0;
     bool foundProcess;
     while(listIterator < LIST_SIZE){
-        if(processList[listIterator].processId == requiredProcessId){
+        if(processList[listIterator].processId == requiredProcessId && processList[listIterator].active){
             foundProcess = true;
             break;
         }
@@ -163,9 +185,7 @@ int indexFinderByComparingNames(string processName){
             foundProcess = true;
             break;
         }
-        else{
-            listIterator++;
-        }
+        listIterator++;
     }
     if(!foundProcess){
         listIterator*=-1;
@@ -185,9 +205,14 @@ bool idIsGiven(int returnValueOfAtoiFunction){
     return false;
 }   
 
-void checkError(int number){
-    if (number < 0)
+void checkError(int number, string msg){
+    int n = msg.length();
+    char message[n + 1],  id [sizeof(int)];
+    strcpy(message, msg.c_str());
+    if (number < 0){
         perror("Error");
+        write(STDOUT_FILENO, message, strlen(message));
+    }
 }
 
 void createPipe(int p [], int type){
@@ -251,29 +276,31 @@ void nullTerminate(char* a, char* b, int ret){
 }
 
 void printInstructions(){
-    char outputMessageForInstruction [] = "You have the following commands: print, print client, list, list client, exit.\n" ;
+    char seperator [] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+    char outputMessageForInstruction [] = "You have the following commands: print, print <client id> <message>, list all, list <client id>.\n\n" ;
     char outputMessageForInput [] = "Enter your instruction: ";
-    checkError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)));
-    checkError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)));
+    checkError(write(STDOUT_FILENO, &seperator , strlen(seperator)), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)), WRITE_ERROR_MESSAGE);
 }
 
 void printListOnServer(char id [] , char char_array [] ){
-    checkError(write(STDOUT_FILENO, "\n", 1 ));
-    checkError(write(STDOUT_FILENO, "Client ID :", strlen("Client ID :")));
-    checkError(write(STDOUT_FILENO, id, strlen(id)));
-    checkError(write(STDOUT_FILENO, "\n",1 ));
+    checkError(write(STDOUT_FILENO, "\n", 1 ), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, "Client ID :", strlen("Client ID :")), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, id, strlen(id)), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, "\n",1 ), WRITE_ERROR_MESSAGE);
     if (char_array[0] == '\0'){
-        checkError(write(STDOUT_FILENO, "Client not connected any more\n" , strlen("Client not connected any more\n")));
+        checkError(write(STDOUT_FILENO, "Client not connected any more\n" , strlen("Client not connected any more\n")), WRITE_ERROR_MESSAGE);
     }else{
-        checkError(write(STDOUT_FILENO, char_array , strlen(char_array)));
+        checkError(write(STDOUT_FILENO, char_array , strlen(char_array)), WRITE_ERROR_MESSAGE);
     }
     
-    checkError(write(STDOUT_FILENO, "\n",1 ));
+    checkError(write(STDOUT_FILENO, "\n",1 ), WRITE_ERROR_MESSAGE);
 }
 
 void printAnswer(double *answer, char buffer [], int msgsock){
-    int sprinfReturn = sprintf(buffer, "Answer: %.2f\n", *answer);
-    checkError(write(msgsock,buffer,sprinfReturn));
+    int sprinfReturn = sprintf(buffer, "Answer = %.2f\n", *answer);
+    checkError(write(msgsock,buffer,sprinfReturn), SOCKET_ERROR_MESSAGE);
     *answer = 0;
 }
 
@@ -284,26 +311,9 @@ void handleFirstNumberProblem(bool* isFirstNumberFromList, double* answer, doubl
     }
 }
 
-void handler(int sig){
-    bool processFound;
-    int childIdofKilledProcess, processListIterator;
 
-    if(sig == SIGCHLD){
-        childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
-        processListIterator = indexFinderByComparingProcessId(childIdofKilledProcess);
-       
-        if(processListIterator >= 0)
-            processFound = true;  
-
-        if (processFound){
-            activateProcess(processListIterator, false);
-            setEndingTime(processListIterator);
-        }
-    }
-}
-
-void maintainListOnServer(int clientHandlerWrite, int clientId, int ipcType){
-    int processListIterator = 0;
+void maintainListOnServer(int ipc, int ipcType){
+    int processListIterator = 0, ret;
     char temperoryList [SIZE], List[SIZE] = {};
     while(processList[processListIterator].processId!= 0){
         if(processList[processListIterator].active){
@@ -320,28 +330,51 @@ void maintainListOnServer(int clientHandlerWrite, int clientId, int ipcType){
         processListIterator++;
     }
     if(ipcType == 1){
-        checkError(write(clientHandlerWrite, &clientId,sizeof(clientId)));
+        checkError(ret = write(ipc, &clientId, sizeof(clientId)), PIPE_ERROR_MESSAGE);
+        if(ret < 0){
+
+        }
     }
     if(strlen(List) <= 0){
-        checkError(write(clientHandlerWrite, "No active processes.\n",strlen("No active processes.\n")));
+        checkError(write(ipc, "No active processes.\n",strlen("No active processes.\n")), WRITE_ERROR_MESSAGE);
     }
     else{
-        checkError(write(clientHandlerWrite, List, strlen(List)));
+        checkError(write(ipc, List, strlen(List)), WRITE_ERROR_MESSAGE);
     } 
+}
+
+void handler(int sig){
+    bool processFound;
+    int childIdofKilledProcess, processListIterator;
+
+    if(sig == SIGCHLD){
+        childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
+        processListIterator = indexFinderByComparingProcessId(childIdofKilledProcess);
+       
+        if(processListIterator >= 0)
+            processFound = true;  
+
+        if (processFound){
+            activateProcess(processListIterator, false);
+            setEndingTime(processListIterator);
+            maintainListOnServer(active[clientId].pipeWrite , 1);
+        }
+    }
 }
 
 void *clientHandler(void * arg){
     
     int msgsock = *(int *)arg;
     int clientHandlerWrite [2];
-    int clientId, clientHandlerId;
+    int clientHandlerId;
     createPipe(clientHandlerWrite, 1);
 
     clientId = assignClientID();
     active[clientId].socket = msgsock;
+    active[clientId].pipeWrite = clientHandlerWrite[1];
 
 
-    checkError(clientHandlerId = fork());
+    checkError(clientHandlerId = fork(), FORK_ERROR_MESSAGE);
     if (childProcess(clientHandlerId)){
         close(clientHandlerWrite[0]);
         int ret;
@@ -350,7 +383,7 @@ void *clientHandler(void * arg){
         while(keepRunning){
             char recievedCommand [BUFF_SIZE] = {};     
             string instruction;
-            checkError(ret = read(msgsock, recievedCommand, BUFF_SIZE));
+            checkError(ret = read(msgsock, recievedCommand, BUFF_SIZE), SOCKET_ERROR_MESSAGE);
             char* instructionTokens = tokenizer(recievedCommand);
             instruction.assign(instructionTokens);
             
@@ -362,7 +395,7 @@ void *clientHandler(void * arg){
 
                 while(numberListHasNotEnded(instructionTokens)){
                     if(!isListNumerical(instructionTokens)){
-                        checkError(write(msgsock, "List is not numerical.\n", strlen("List is not numerical.\n")));
+                        checkError(write(msgsock, "List is not numerical.\n", strlen("List is not numerical.\n")), SOCKET_ERROR_MESSAGE);
                         break;
                     }
                     if (*instructionTokens == '\n'){
@@ -387,7 +420,7 @@ void *clientHandler(void * arg){
                                 else{answer = answer / atof(instructionTokens);}    
                             }
                             else{
-                                checkError(write(msgsock ,"Can't divide by 0\n", strlen("Can't divide by 0\n")));
+                                checkError(write(msgsock ,"Can't divide by 0\n", strlen("Can't divide by 0\n")), SOCKET_ERROR_MESSAGE);
                                 break;
                             } 
                         }
@@ -402,91 +435,102 @@ void *clientHandler(void * arg){
                 createPipe(parentWrite, 2);
                 createPipe(execProcessWrite, 2);
 
-                checkError(pId = fork());
+                checkError(pId = fork(), FORK_ERROR_MESSAGE);
                 if (parentProcess(pId)){   
                     closePipeEnds(parentWrite[0], execProcessWrite[1]);
                     instructionTokens = strtok(NULL, " \n");
-                    checkError(write(parentWrite[1], instructionTokens, strlen(instructionTokens)));
-                    checkError(ret = read(execProcessWrite[0], buffer, BUFF_SIZE));
-                    if(ret == 0){ //if exec is successful
-                        int listIterator = indexFinderByComparingProcessId(0);
-                        setProcessId(listIterator, pId);
-                        char processName [strlen(instructionTokens)];
-                        sprintf(processName, "%s", instructionTokens);
-                        setProcessName(listIterator, processName);
-                        setStartingTime(listIterator);
-                        activateProcess(listIterator, true);
-                        checkError(write(msgsock, "Opening Status: SUCCESS\n", strlen("Opening Status: Success\n")));
-                        maintainListOnServer(clientHandlerWrite[1], clientId, 1);              
+                    if(instructionTokens != NULL){
+                        checkError(write(parentWrite[1], instructionTokens, strlen(instructionTokens)), PIPE_ERROR_MESSAGE);
+                        checkError(ret = read(execProcessWrite[0], buffer, BUFF_SIZE), PIPE_ERROR_MESSAGE);
+                        if(ret == 0){ //if exec is successful
+                            int listIterator = emptyIndexFinder();
+                            setProcessId(listIterator, pId);
+                            char processName [strlen(instructionTokens)];
+                            sprintf(processName, "%s", instructionTokens);
+                            setProcessName(listIterator, processName);
+                            setStartingTime(listIterator);
+                            activateProcess(listIterator, true);
+                            checkError(write(msgsock, "Opening Status: SUCCESS\n", strlen("Opening Status: Success\n")), SOCKET_ERROR_MESSAGE);
+                            maintainListOnServer(clientHandlerWrite[1], 1);              
+                        }
+                        else{
+                            checkError(write(msgsock, buffer, strlen(buffer)), SOCKET_ERROR_MESSAGE);
+                        }
                     }
                     else{
-                        checkError(write(msgsock, buffer, strlen(buffer)));
+                        checkError(write(parentWrite[1], "dummy", strlen("dummy")), PIPE_ERROR_MESSAGE);
+                        checkError(ret = read(execProcessWrite[0], buffer, BUFF_SIZE), PIPE_ERROR_MESSAGE);
+                        checkError(write(msgsock, buffer, strlen(buffer)), SOCKET_ERROR_MESSAGE);
                     }
-
-                    
                 }
                 else if (childProcess(pId)){
                     char temp [BUFF_SIZE];
                     int ret;
                     closePipeEnds( parentWrite[1] , execProcessWrite[0]);
-                    checkError(ret = read(parentWrite[0], temp, BUFF_SIZE));
+                    checkError(ret = read(parentWrite[0], temp, BUFF_SIZE), PIPE_ERROR_MESSAGE);
                     char application[ret];
                     nullTerminate(application, temp, ret);
-                    checkError(execlp(application, application, NULL));
-                    checkError(write(execProcessWrite[1], "Opening Status: FAILED.\n", strlen("Opening Status: FAILED.\n")));
+                    execlp(application, application, NULL);
+                    checkError(write(execProcessWrite[1], "Opening Status: FAILED.\n", strlen("Opening Status: FAILED.\n")), PIPE_ERROR_MESSAGE);
                 }    
             }
 
             else if (killInstruction(instruction)){
                 int status, processListIterator, processId, waitCheck;
-                bool processFound;
+                bool processFound = false;
                 instructionTokens = strtok(NULL, " \n");
-                processId = atoi (instructionTokens);
                 
-                if (idIsGiven(processId)){
-                    processListIterator = indexFinderByComparingProcessId(processId);
-                    if(processListIterator >= 0){
-                        processFound = true;
+                if(instructionTokens != NULL){
+                    processId = atoi (instructionTokens);
+                    if (idIsGiven(processId)){
+                        processListIterator = indexFinderByComparingProcessId(processId);
+                        if(processListIterator >= 0){
+                            processFound = true;
+                        }
+                        if (processFound){
+                            checkError(ret = kill(processId, SIGTERM), "Error in kill");
+                            if (ret >= 0)
+                                checkError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")), SOCKET_ERROR_MESSAGE);                 
+                            
+                            status = 0; 
+                            checkError(waitCheck = waitpid(processId, &status, 0), "Error in wait.");
+                            activateProcess(processListIterator, false);
+                            setEndingTime(processListIterator);
+                        }
+                        else{
+                            checkError(write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n")), SOCKET_ERROR_MESSAGE);
+                        }
                     }
-                    if (processFound){
-                        checkError(ret = kill(processId, SIGTERM));
-                        if (ret >= 0)
-                            checkError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")));                 
+                    else if (!idIsGiven(processId)){
                         
-                        status = 0; 
-                        checkError(waitCheck = waitpid(processId, &status, 0));
-                        activateProcess(processListIterator, false);
-                        setEndingTime(processListIterator);
-                    }
-                    else{
-                        checkError(write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n")));
-                    }
-                }
-                else if (!idIsGiven(processId)){
-                    
-                    string processName;
-                    processName.assign(instructionTokens);
-                    processListIterator = indexFinderByComparingNames(processName);
-                    if(processListIterator >= 0){
-                        processFound =true;
-                    }
-                    if(processFound){
-                        checkError(ret = kill(processList[processListIterator].processId, SIGTERM));
-                        if (ret >= 0)
-                            checkError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")));
+                        string processName;
+                        processName.assign(instructionTokens);
+                        processListIterator = indexFinderByComparingNames(processName);
+                        if(processListIterator >= 0){
+                            processFound =true;
+                        }
                         
-                        activateProcess(processListIterator, false);
-                        setEndingTime(processListIterator);
+                        if(processFound){
+                            checkError(ret = kill(processList[processListIterator].processId, SIGTERM), "Error in kill.");
+                            if (ret >= 0)
+                                checkError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")), SOCKET_ERROR_MESSAGE);
+                            
+                            activateProcess(processListIterator, false);
+                            setEndingTime(processListIterator);
+                        }
+                        else{
+                            checkError(write(msgsock, "Process not killed as it doesn't exist.\n",strlen("process not killed as it doesn't exist.\n")), SOCKET_ERROR_MESSAGE);
+                        }
                     }
-                    else{
-                        checkError(write(msgsock, "Process not killed as it doesnt exist.\n",strlen("process not killed as it doesnt exist.\n")));
+                    else {
+                        write(msgsock, "Failed in killing process.\n",strlen("failed in killing process.\n"));
                     }
-                }
-                else {
-                    write(msgsock, "Failed in killing process.\n",strlen("failed in killing process.\n"));
-                }
 
-                maintainListOnServer(clientHandlerWrite[1], clientId, 1);
+                    maintainListOnServer(clientHandlerWrite[1], 1);
+                    }
+            else{
+                write(msgsock, "Invalid Instruction.\n",strlen("Invalid Instruction.\n"));
+            }
                 sleep(1);
             }
 
@@ -546,25 +590,25 @@ void *clientHandler(void * arg){
 
 
                     if(strlen(List) <= 0){
-                        checkError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")));
+                        checkError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")), SOCKET_ERROR_MESSAGE);
                     }
                     else {
-                        checkError(write(msgsock,List,strlen(List)));
+                        checkError(write(msgsock,List,strlen(List)), SOCKET_ERROR_MESSAGE);
                     }
 
                 }
                 else if (param.compare("active\n")==0){
-                    maintainListOnServer(msgsock, clientId, 0);    
+                    maintainListOnServer(msgsock, 0);    
                 }
                 else{
-                    checkError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")));
+                    checkError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")), SOCKET_ERROR_MESSAGE);
                 }
 
               sleep(1);
             }
             
             else{
-                checkError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")));
+                checkError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")), SOCKET_ERROR_MESSAGE);
             }
             sleep(1);
         }
@@ -576,8 +620,8 @@ void *clientHandler(void * arg){
             while(true){
             char temp [1000000] = {};
             int id, ret1, ret2;
-            checkError(ret1 = read(clientHandlerWrite[0], &id, sizeof(int)));
-            checkError(ret2 = read(clientHandlerWrite[0], temp, sizeof(temp)));
+            checkError(ret1 = read(clientHandlerWrite[0], &id, sizeof(int)), PIPE_ERROR_MESSAGE);
+            checkError(ret2 = read(clientHandlerWrite[0], temp, sizeof(temp)), PIPE_ERROR_MESSAGE);
             char buff [ret2] = {};
             nullTerminate(buff, temp, ret2);
             active[id].list.assign(buff);
@@ -591,24 +635,22 @@ void *clientHandler(void * arg){
 
 
 void takeSuperUserInput(int pipe){
-    int ret;
+    int ret, ret1;
     while(true){
         printInstructions();
         char instr[LIST_SIZE]={};
-        checkError(ret = read(STDIN_FILENO, instr, LIST_SIZE)); 
-        checkError(write(pipe, instr,strlen(instr)));
+        checkError(ret = read(STDIN_FILENO, instr, LIST_SIZE), READ_ERROR_MESSAGE); 
+        checkError(ret1 = write(pipe, instr,strlen(instr)), PIPE_ERROR_MESSAGE);
         sleep(1);
     }
 }
 
 void changeListFormat(int clientId){
-     
         int n = active[clientId].list.length();
         char char_array[n + 1],  id [sizeof(int)];
         strcpy(char_array, active[clientId].list.c_str());
         sprintf(id, "%d", active[clientId].clientId);
-        printListOnServer(id, char_array);
-    
+        printListOnServer(id, char_array);  
 }
 
 bool checkIfClientExists(int clientID){
@@ -621,7 +663,7 @@ void *superUser(void *arg){
         int superUserWrite[2], superUserId;
         createPipe(superUserWrite, 1); // pipe between connection process and super user
         
-        checkError(superUserId = fork());
+        checkError(superUserId = fork(), FORK_ERROR_MESSAGE);
         if (childProcess(superUserId)){
             close(superUserWrite[0]);
             takeSuperUserInput(superUserWrite[1]);
@@ -632,7 +674,7 @@ void *superUser(void *arg){
             while(true){
                 
                 int ret;
-                checkError(ret = read(superUserWrite[0], instr, LIST_SIZE)); 
+                checkError(ret = read(superUserWrite[0], instr, LIST_SIZE), PIPE_ERROR_MESSAGE); 
 
                 char * tok = tokenizer(instr);
                 string command;
@@ -676,7 +718,7 @@ void *superUser(void *arg){
                             correctInput = false;
                         }
                         else{
-                            checkError(write(STDOUT_FILENO, "Incorrect client ID.\n\n",strlen("Incorrect client ID.\n\n")));
+                            checkError(write(STDOUT_FILENO, "Incorrect client ID.\n\n",strlen("Incorrect client ID.\n\n")), WRITE_ERROR_MESSAGE);
                         }
                     }    
                 }
@@ -685,31 +727,26 @@ void *superUser(void *arg){
                     int clientId, index, n;
                     bool correctInput = true;
                     tok = strtok(NULL, " \n");
-                    checkError(clientId = atoi (tok));
+                    checkError(clientId = atoi (tok), "Error in atoi.");
                     command.assign(tok);
                      if (command.compare("0") == 0){
                             clientId = 0;
                     }
                     else{
-                        cout << strlen(tok)<<endl;
                         clientId = atoi(tok);
                         if(clientId == 0){
                             correctInput = false;
                         }
                     }
 
-
-                    
-                    char message [1000] = {};
+                    char message [SIZE] = {};
                     if (!correctInput){
                         index = 0;
                         
                         while(tok != NULL){
-                            cout << tok << endl;
                             strcat(message,tok);
                             strcat(message," ");
-                            tok = strtok(NULL, " ");     
-                                             
+                            tok = strtok(NULL, " ");                           
                         }
                         
                         int j = 0;
@@ -717,7 +754,7 @@ void *superUser(void *arg){
                             j++;
                             
                         }
-                            message[j+1] = '\0';
+                        message[j+1] = '\0';
                         
                         
                         
@@ -727,43 +764,26 @@ void *superUser(void *arg){
                             index++;
                         }
                         
-                     
-                        
-                        
-                        
-                        
                      }
                      else{
-                        tok = strtok(NULL, " ");
+                        tok = strtok(NULL, " ");         
                         while(tok != NULL){
                             strcat(message,tok);
                             strcat(message," ");
-                            tok = strtok(NULL, " ");     
-                                             
+                            tok = strtok(NULL, " ");                      
                         }
 
                         int j = 0;
                         while(message[j] != '\n'){
                             j++;
                         }
+                        message[j+1] = '\0';
 
-                        for (size_t k = j+1; k < sizeof(message); k++)
-                        {
-                            /* code */
-                            message[k] = '\0';
-                        }
                         write(active[clientId].socket, message , strlen(message));
                     }
-                    
-                    
-                    
-                    
                 } 
             }
         }
-    
-
- 
     return NULL;
 }
 

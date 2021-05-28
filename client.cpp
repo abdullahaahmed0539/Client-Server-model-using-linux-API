@@ -16,7 +16,7 @@
 #include <pthread.h>
 using namespace std;
 
-#define PRINT_ERROR_MESSAGE "Error in printing."
+#define WRITE_ERROR_MESSAGE "Error in printing."
 #define READ_ERROR_MESSAGE "Error in reading."
 #define SOCKET_ERROR_MESSAGE "Error in printing."
 #define size 100
@@ -45,36 +45,48 @@ bool instructionIsToExit(char instruction []){
 void printInstructions(){
     char seperator [] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
     char outputMessageForInstruction [] = "You have the following commands: add, sub, mul, div, run, kill, list, listall, exit.\n" ;
-    char outputMessageForSyntax [] = "\n---------Syntax Examples-------\nadd 5 8 \nrun gedit\nkill 12345\nkill gedit\nlist\nlistall\nexit\n------------------------------\n";
+    char outputMessageForSyntax [] = "\n---------Syntax Examples-------\nadd 5 8 \nrun gedit\nkill 12345\nkill gedit\nlist active\nlist all\nexit\n------------------------------\n";
     char outputMessageForInput [] = "\nEnter your instruction: ";
 
-    checkError(write(STDOUT_FILENO, &seperator , strlen(seperator)), PRINT_ERROR_MESSAGE);
-    checkError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)), PRINT_ERROR_MESSAGE);
-    checkError(write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax)), PRINT_ERROR_MESSAGE);
-    checkError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)), PRINT_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &seperator , strlen(seperator)), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &outputMessageForInstruction , strlen(outputMessageForInstruction)), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO,outputMessageForSyntax, strlen(outputMessageForSyntax)), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, &outputMessageForInput, strlen(outputMessageForInput)), WRITE_ERROR_MESSAGE);
 } 
 
 void displayOutput(char * response, int ret){
-    checkError(write(STDOUT_FILENO, response, ret), PRINT_ERROR_MESSAGE);
-    checkError(write(STDOUT_FILENO,"\n\n\n",3), PRINT_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO,"\n\n",2), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, "Response from server: ", strlen("Response from server: ")), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO, response, ret), WRITE_ERROR_MESSAGE);
+    checkError(write(STDOUT_FILENO,"\n\n\n",3), WRITE_ERROR_MESSAGE);
 }
 
 void* userReadFunction(void *args){
     int sock = *(int *)args;
     char instruction[size]={};
-    int ret;
+    int ret, ret1;
 
     printInstructions();
     checkError(ret = read(STDIN_FILENO, instruction, size), READ_ERROR_MESSAGE);
-    checkError(write(sock, instruction, ret), SOCKET_ERROR_MESSAGE);
+    checkError(ret1 = write(sock, instruction, ret), SOCKET_ERROR_MESSAGE); 
     if(instructionIsToExit(instruction))
         exit(EXIT_SUCCESS);
     return NULL;
 }
 
+int sock;
+void handler(int sig){
+    if(sig == SIGINT){
+        checkError(write(STDOUT_FILENO,"\n\n",2), WRITE_ERROR_MESSAGE);
+        checkError(write(STDOUT_FILENO, "Terminating session.\n", strlen("Terminating session.\n")), WRITE_ERROR_MESSAGE);
+        checkError(write(sock, "exit\n", strlen("exit\n")), SOCKET_ERROR_MESSAGE);
+        exit(EXIT_SUCCESS);
+    }
+} 
+
 int main(int argc, char *argv[])
 	{
-	int sock;
+    signal(SIGINT, handler);
 	struct sockaddr_in server;
 	struct hostent *hp;
 	char buf[1024];
@@ -110,7 +122,11 @@ int main(int argc, char *argv[])
             pthread_t outputThread;
             pthread_create(&outputThread, NULL, userReadFunction, (void *)&sock);
             pthread_detach(outputThread);
-            checkError(ret = read (sock, response, (size*size)), READ_ERROR_MESSAGE);
+            checkError(ret = read (sock, response, (size*size)), SOCKET_ERROR_MESSAGE);
+            if(ret == 0){
+                checkError(write(STDOUT_FILENO, "Disconnected From Server. Terminating session.", strlen("Disconnected From Server. Terminating session.")), WRITE_ERROR_MESSAGE);
+                exit(EXIT_FAILURE);
+            }
             displayOutput(response, ret);
         }  
 	}
