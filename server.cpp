@@ -17,6 +17,9 @@
 #include <cctype>
 using namespace std;
 
+#define LIST_SIZE 20
+#define BUFF_SIZE 50
+#define SIZE 2500
 
 
 //STRUCTS
@@ -33,12 +36,9 @@ struct activeList {
 };
 
 
-
 //GLOBAL DECLARATIONS
-const int LISTSIZE = 20;
-int clientHandlerRead[2];
-listProcess processList [LISTSIZE];
-activeList active [LISTSIZE];
+listProcess processList [LIST_SIZE];
+activeList active [LIST_SIZE];
 
 bool characterIsNumerical (char character){
     if(character >= '0' && character <= '9' )
@@ -77,43 +77,41 @@ char* tokenizer(char numberList []){
     return listToken;
 }
 
-bool instructionIsToExit(string instructionFromServer){
+bool exitInstruction(string instructionFromServer){
     if(instructionFromServer=="exit")
         return true;
     return false;
 }
 
-bool instructionIsForArithmeticOperations (string instruction){
-    
+bool arithmeticInstruction (string instruction){
     if((instruction == "add") || (instruction == "sub") || (instruction == "mul") || (instruction == "div"))
         return true;
     return false;
 } 
 
-bool instructionIsToRun(string instruction){
+bool runInstruction(string instruction){
     if(instruction == "run")
         return true;
     return false;
 }
 
-bool instructionIsToKillProcess(string instruction){
+bool killInstruction(string instruction){
     if(instruction == "kill")
         return true;
     return false;
 }
 
-bool instructionIsToDisplayList(string instruction){
+bool DisplayListInstruction(string instruction){
     if(instruction == "listall" || instruction == "list")
         return true;
     return false;
 }
 
-bool instructionIsToPrintOnClient(string instruction){
+bool printOnClientInstruction(string instruction){
     if(instruction == "print")
         return true;
     return false;
 }
-
 
 bool numberListHasNotEnded (char * instructionTokens){
     if(instructionTokens==NULL)
@@ -121,28 +119,15 @@ bool numberListHasNotEnded (char * instructionTokens){
     return true;
 }
 
-bool isParentProcess(pid_t processId){
+bool parentProcess(pid_t processId){
     if (processId > 0)
         return true;
     return false;
 }
 
-int emptyIndexFinder(listProcess processList[]){
+int assignClientID(){
     int listIterator = 0;
-    while(listIterator < LISTSIZE){
-        if(processList[listIterator].processId != 0){
-            listIterator++;
-        }
-        else{
-            break;
-        }
-    }
-    return listIterator;
-}
-
-int assignClientID(activeList active[]){
-    int listIterator = 0;
-    while(listIterator < LISTSIZE){
+    while(listIterator < LIST_SIZE){
         if(active[listIterator].clientId != -1){
             listIterator++;
         }
@@ -154,10 +139,10 @@ int assignClientID(activeList active[]){
     return listIterator;
 }
 
-int indexFinderByComparingProcessId(listProcess processList[], int requiredProcessId){
+int indexFinderByComparingProcessId(int requiredProcessId){
     int listIterator = 0;
     bool foundProcess;
-    while(listIterator < LISTSIZE){
+    while(listIterator < LIST_SIZE){
         if(processList[listIterator].processId == requiredProcessId){
             foundProcess = true;
             break;
@@ -170,10 +155,10 @@ int indexFinderByComparingProcessId(listProcess processList[], int requiredProce
     return listIterator;
 }
 
-int indexFinderByComparingNames(listProcess processList[], string processName){
+int indexFinderByComparingNames(string processName){
     int listIterator = 0;
     bool foundProcess;
-    while(listIterator < LISTSIZE){
+    while(listIterator < LIST_SIZE){
         if(processList[listIterator].processName == processName && processList[listIterator].active){
             foundProcess = true;
             break;
@@ -188,37 +173,31 @@ int indexFinderByComparingNames(listProcess processList[], string processName){
     return listIterator;
 }
 
-bool isChildProcess(pid_t processId){
+bool childProcess(pid_t processId){
     if (processId == 0)
         return true;
     return false;
 }
 
-bool processIdIsGiven(int returnValueOfAtoiFunction){
+bool idIsGiven(int returnValueOfAtoiFunction){
     if(returnValueOfAtoiFunction > 0)
         return true;
     return false;
 }   
-
-bool processNameIsGiven(int returnValueOfAtoiFunction){
-    if(returnValueOfAtoiFunction == 0)
-        return true;
-    return false;
-} 
 
 void checkError(int number){
     if (number < 0)
         perror("Error");
 }
 
-void createPipe(int p []){
-    if(pipe(p) < 0)
-        perror("Error in pipe");
-}
-
-void createPipe2(int p []){
-    if (pipe2(p, O_CLOEXEC) < 0)
-        perror("Error in piping for exec ");              
+void createPipe(int p [], int type){
+    if (type == 2){
+        if (pipe2(p, O_CLOEXEC) < 0)
+            perror("Error in piping for exec "); 
+    }else {
+        if(pipe(p) < 0)
+            perror("Error in pipe");
+    }
 }
 
 void setStartingTime(int i){
@@ -234,13 +213,8 @@ void setEndingTime(int i){
     processList[i].elapsedTime = difftime(processList[i].endTime, processList[i].startTime);
 }
 
-
-void activateProcess(int i){
-    processList[i].active = true;
-}
-
-void deactivateProcess(int i){
-    processList[i].active = false;
+void activateProcess(int i, bool status){
+    processList[i].active = status;
 }
 
 void setProcessId(int i, int id){
@@ -252,12 +226,12 @@ void setProcessName(int i, string name){
 }
 
 void initializeProcessList (){
-    for (size_t index = 0; index < LISTSIZE; index++)
+    for (size_t index = 0; index < LIST_SIZE; index++)
         processList[index].processId = 0;
 }
 
 void initializeActiveList (){
-    for (size_t index = 0; index < LISTSIZE; index++){
+    for (size_t index = 0; index < LIST_SIZE; index++){
         active[index].clientId = -1;
         active[index].socket = -2;
         active[index].list = "No processes";
@@ -310,22 +284,50 @@ void handleFirstNumberProblem(bool* isFirstNumberFromList, double* answer, doubl
     }
 }
 
-
 void handler(int sig){
     bool processFound;
     int childIdofKilledProcess, processListIterator;
 
     if(sig == SIGCHLD){
         childIdofKilledProcess = waitpid(-1, NULL, WNOHANG);
-        processListIterator = indexFinderByComparingProcessId(processList, childIdofKilledProcess);
+        processListIterator = indexFinderByComparingProcessId(childIdofKilledProcess);
+       
         if(processListIterator >= 0)
-            processFound = true;           
+            processFound = true;  
+
         if (processFound){
-            deactivateProcess(processListIterator);
+            activateProcess(processListIterator, false);
             setEndingTime(processListIterator);
         }
-        
     }
+}
+
+void maintainListOnServer(int clientHandlerWrite, int clientId, int ipcType){
+    int processListIterator = 0;
+    char temperoryList [SIZE], List[SIZE] = {};
+    while(processList[processListIterator].processId!= 0){
+        if(processList[processListIterator].active){
+            tm startTime = *localtime(&processList[processListIterator].startTime);                                               
+            int startTimeHour = startTime.tm_hour;
+            int startTimeMinute = startTime.tm_min;
+            int startTimeSecond = startTime.tm_sec;
+                            
+            sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n***********************************\n ",
+                    processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
+                                
+            strcat(List,temperoryList);  
+        }
+        processListIterator++;
+    }
+    if(ipcType == 1){
+        checkError(write(clientHandlerWrite, &clientId,sizeof(clientId)));
+    }
+    if(strlen(List) <= 0){
+        checkError(write(clientHandlerWrite, "No active processes.\n",strlen("No active processes.\n")));
+    }
+    else{
+        checkError(write(clientHandlerWrite, List, strlen(List)));
+    } 
 }
 
 void *clientHandler(void * arg){
@@ -333,27 +335,27 @@ void *clientHandler(void * arg){
     int msgsock = *(int *)arg;
     int clientHandlerWrite [2];
     int clientId, clientHandlerId;
-    createPipe(clientHandlerWrite);
-    clientId = assignClientID(active);
+    createPipe(clientHandlerWrite, 1);
+
+    clientId = assignClientID();
     active[clientId].socket = msgsock;
 
 
     checkError(clientHandlerId = fork());
-    if (isChildProcess(clientHandlerId)){
-        closePipeEnds(clientHandlerRead[1],clientHandlerWrite[0]);
+    if (childProcess(clientHandlerId)){
+        close(clientHandlerWrite[0]);
         int ret;
-        const int BUFFERSIZE = 50;
         bool keepRunning = true;
         initializeProcessList();
         while(keepRunning){
-            char recievedCommand [BUFFERSIZE] = {};     
+            char recievedCommand [BUFF_SIZE] = {};     
             string instruction;
-            checkError(ret = read(msgsock, recievedCommand, BUFFERSIZE));
+            checkError(ret = read(msgsock, recievedCommand, BUFF_SIZE));
             char* instructionTokens = tokenizer(recievedCommand);
             instruction.assign(instructionTokens);
             
-            if(instructionIsForArithmeticOperations(instruction)){   
-                char buffer [BUFFERSIZE]; 
+            if(arithmeticInstruction(instruction)){   
+                char buffer [BUFF_SIZE]; 
                 double answer = 0;
                 bool firstNumberFromTheNumberList = true;                
                 instructionTokens = strtok(NULL," ");
@@ -394,52 +396,28 @@ void *clientHandler(void * arg){
                 }
             }
 
-            else if (instructionIsToRun(instruction)){   
-                char buffer [BUFFERSIZE] = {};
+            else if (runInstruction(instruction)){   
+                char buffer [BUFF_SIZE] = {};
                 int parentWrite[2], execProcessWrite [2], pId;
-                createPipe2(parentWrite);
-                createPipe2(execProcessWrite);
+                createPipe(parentWrite, 2);
+                createPipe(execProcessWrite, 2);
 
                 checkError(pId = fork());
-                if (isParentProcess(pId)){   
+                if (parentProcess(pId)){   
                     closePipeEnds(parentWrite[0], execProcessWrite[1]);
                     instructionTokens = strtok(NULL, " \n");
                     checkError(write(parentWrite[1], instructionTokens, strlen(instructionTokens)));
-                    checkError(ret = read(execProcessWrite[0], buffer, BUFFERSIZE));
-                    if(ret == 0){
-                        int listIterator = emptyIndexFinder(processList);
+                    checkError(ret = read(execProcessWrite[0], buffer, BUFF_SIZE));
+                    if(ret == 0){ //if exec is successful
+                        int listIterator = indexFinderByComparingProcessId(0);
                         setProcessId(listIterator, pId);
                         char processName [strlen(instructionTokens)];
                         sprintf(processName, "%s", instructionTokens);
                         setProcessName(listIterator, processName);
                         setStartingTime(listIterator);
-                        activateProcess(listIterator);
+                        activateProcess(listIterator, true);
                         checkError(write(msgsock, "Opening Status: SUCCESS\n", strlen("Opening Status: Success\n")));
-
-                        int processListIterator = 0;
-                        const int SIZE = BUFFERSIZE * BUFFERSIZE;
-                        char temperoryList [SIZE], List[SIZE] = {};
-                        while(processList[processListIterator].processId!= 0){
-                            if(processList[processListIterator].active){
-                                tm startTime = *localtime(&processList[processListIterator].startTime);                                               
-                                int startTimeHour = startTime.tm_hour;
-                                int startTimeMinute = startTime.tm_min;
-                                int startTimeSecond = startTime.tm_sec;
-                            
-                                sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n***********************************\n ",
-                                processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
-                                
-                                strcat(List,temperoryList);  
-                            }
-                            processListIterator++;
-                        }
-                        checkError(write(clientHandlerWrite[1], &clientId,sizeof(clientId)));
-                        if(strlen(List) <= 0){
-                            checkError(write(clientHandlerWrite[1], "No processes.\n",strlen("No active processes.\n")));
-                        }
-                        else{
-                            checkError(write(clientHandlerWrite[1],List,strlen(List)));
-                        }    
+                        maintainListOnServer(clientHandlerWrite[1], clientId, 1);              
                     }
                     else{
                         checkError(write(msgsock, buffer, strlen(buffer)));
@@ -447,11 +425,11 @@ void *clientHandler(void * arg){
 
                     
                 }
-                else{
-                    char temp [BUFFERSIZE];
+                else if (childProcess(pId)){
+                    char temp [BUFF_SIZE];
                     int ret;
                     closePipeEnds( parentWrite[1] , execProcessWrite[0]);
-                    checkError(ret = read(parentWrite[0], temp, BUFFERSIZE));
+                    checkError(ret = read(parentWrite[0], temp, BUFF_SIZE));
                     char application[ret];
                     nullTerminate(application, temp, ret);
                     checkError(execlp(application, application, NULL));
@@ -459,14 +437,14 @@ void *clientHandler(void * arg){
                 }    
             }
 
-            else if (instructionIsToKillProcess(instruction)){
+            else if (killInstruction(instruction)){
                 int status, processListIterator, processId, waitCheck;
                 bool processFound;
                 instructionTokens = strtok(NULL, " \n");
                 processId = atoi (instructionTokens);
                 
-                if (processIdIsGiven(processId)){
-                    processListIterator = indexFinderByComparingProcessId(processList, processId);
+                if (idIsGiven(processId)){
+                    processListIterator = indexFinderByComparingProcessId(processId);
                     if(processListIterator >= 0){
                         processFound = true;
                     }
@@ -477,18 +455,18 @@ void *clientHandler(void * arg){
                         
                         status = 0; 
                         checkError(waitCheck = waitpid(processId, &status, 0));
-                        deactivateProcess(processListIterator);
+                        activateProcess(processListIterator, false);
                         setEndingTime(processListIterator);
                     }
                     else{
                         checkError(write(msgsock, "Unsuccessful kill. Process not found.\n",strlen("unsuccessful kill. Process not found.\n")));
                     }
                 }
-                else if (processNameIsGiven(processId)){
+                else if (!idIsGiven(processId)){
                     
                     string processName;
                     processName.assign(instructionTokens);
-                    processListIterator = indexFinderByComparingNames(processList, processName);
+                    processListIterator = indexFinderByComparingNames(processName);
                     if(processListIterator >= 0){
                         processFound =true;
                     }
@@ -497,7 +475,7 @@ void *clientHandler(void * arg){
                         if (ret >= 0)
                             checkError(write(msgsock, "Successfully killed.\n",strlen("successfully killed.\n")));
                         
-                        deactivateProcess(processListIterator);
+                        activateProcess(processListIterator, false);
                         setEndingTime(processListIterator);
                     }
                     else{
@@ -508,40 +486,16 @@ void *clientHandler(void * arg){
                     write(msgsock, "Failed in killing process.\n",strlen("failed in killing process.\n"));
                 }
 
-                processListIterator = 0;
-                const int SIZE = BUFFERSIZE * BUFFERSIZE;
-                char temperoryList [SIZE], List[SIZE] = {};
-                while(processList[processListIterator].processId!= 0){
-                    if(processList[processListIterator].active){
-                        tm startTime = *localtime(&processList[processListIterator].startTime);                                               
-                        int startTimeHour = startTime.tm_hour;
-                        int startTimeMinute = startTime.tm_min;
-                        int startTimeSecond = startTime.tm_sec;
-                            
-                        sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n***********************************\n ",
-                        processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
-                                
-                        strcat(List,temperoryList);  
-                    }
-                        processListIterator++;
-                }
-                checkError(write(clientHandlerWrite[1], &clientId,sizeof(clientId)));
-                if(strlen(List) <= 0){
-                    checkError(write(clientHandlerWrite[1], "No processes.\n",strlen("No active processes.\n")));
-                }
-                else{
-                    checkError(write(clientHandlerWrite[1],List,strlen(List)));
-                } 
+                maintainListOnServer(clientHandlerWrite[1], clientId, 1);
                 sleep(1);
             }
 
-            else if (instructionIsToExit(instruction)){
+            else if (exitInstruction(instruction)){
                 exit(EXIT_SUCCESS);
             }
 
-            else if (instructionIsToDisplayList(instruction)){
+            else if (DisplayListInstruction(instruction)){
                 int processListIterator;      
-                const int SIZE = BUFFERSIZE * BUFFERSIZE;
                 instructionTokens = strtok(NULL, " /n");
                 string param =   (string) instructionTokens;
 
@@ -549,12 +503,10 @@ void *clientHandler(void * arg){
                     processListIterator = 0;
                     char temperoryList[SIZE], List[SIZE] = {};
                     tm startTime, endTime, elTime;
-                    int startTimeFormatted[3];
-                    int* endTimeFormatted;
-                    int* elapsedTimeFormatted;
                     
                     while(processList[processListIterator].processId!= 0 ){
                         if(!processList[processListIterator].active){
+                            //looks for terminated processes
                             startTime = *localtime(&processList[processListIterator].startTime);
                             endTime = *localtime(&processList[processListIterator].endTime);
                             elTime = *localtime(&processList[processListIterator].elapsedTime);
@@ -579,59 +531,38 @@ void *clientHandler(void * arg){
                                     
                         }
                         else{
+                            //looks for active processes
                             tm startTime = *localtime(&processList[processListIterator].startTime); 
                             int startTimeHour = startTime.tm_hour;
                             int startTimeMinute = startTime.tm_min;
                             int startTimeSecond = startTime.tm_sec;
-                            
-
                             sprintf(temperoryList, "\n\n*************Process*******************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n************************************\n ",
                             processList[processListIterator].processId, processList[processListIterator].processName.c_str(),startTimeHour,startTimeMinute,startTimeSecond);
-
-
                             strcat(List,temperoryList);    
-
 
                         }
                         processListIterator++;
                     }
+
+
                     if(strlen(List) <= 0){
                         checkError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")));
                     }
                     else {
                         checkError(write(msgsock,List,strlen(List)));
                     }
+
                 }
                 else if (param.compare("active\n")==0){
-                    processListIterator = 0;
-                    char temperoryList [SIZE], List[SIZE] = {};
-                    while(processList[processListIterator].processId!= 0){
-                        if(processList[processListIterator].active){
-                            tm startTime = *localtime(&processList[processListIterator].startTime);                                               
-                            int startTimeHour = startTime.tm_hour;
-                            int startTimeMinute = startTime.tm_min;
-                            int startTimeSecond = startTime.tm_sec;
-                            
-                            sprintf(temperoryList, "\n*************Active Process********************\nProcess id: %d  \nProcess name: %s \nStarting time: %d:%d:%d. \n***********************************\n ",
-                            processList[processListIterator].processId, processList[processListIterator].processName.c_str(), startTimeHour,startTimeMinute,startTimeSecond);
-                                
-                            strcat(List,temperoryList);  
-                        }
-                        processListIterator++;
-                    }
-                    if(strlen(List) <= 0){
-                        checkError(write(msgsock,"No active processes.\n",strlen("No active processes.\n")));
-                    }
-                    else{
-                        checkError(write(msgsock,List,strlen(List)));
-                    }    
+                    maintainListOnServer(msgsock, clientId, 0);    
                 }
                 else{
                     checkError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")));
                 }
+
               sleep(1);
             }
-
+            
             else{
                 checkError(write(msgsock, "Invalid instruction.\n", strlen("invalid  instruction.\n")));
             }
@@ -640,7 +571,7 @@ void *clientHandler(void * arg){
 		close(msgsock);
 
         }
-        else if (isParentProcess(clientHandlerId)){
+        else if (parentProcess(clientHandlerId)){
             close(clientHandlerWrite[1]);
             while(true){
             char temp [1000000] = {};
@@ -651,79 +582,97 @@ void *clientHandler(void * arg){
             nullTerminate(buff, temp, ret2);
             active[id].list.assign(buff);
             }
-
-
         }
-
-
     return NULL;
 }
 
+
+
+
+
+void takeSuperUserInput(int pipe){
+    int ret;
+    while(true){
+        printInstructions();
+        char instr[LIST_SIZE]={};
+        checkError(ret = read(STDIN_FILENO, instr, LIST_SIZE)); 
+        checkError(write(pipe, instr,strlen(instr)));
+        sleep(1);
+    }
+}
+
+void changeListFormat(int clientId){
+     
+        int n = active[clientId].list.length();
+        char char_array[n + 1],  id [sizeof(int)];
+        strcpy(char_array, active[clientId].list.c_str());
+        sprintf(id, "%d", active[clientId].clientId);
+        printListOnServer(id, char_array);
+    
+}
+
+bool checkIfClientExists(int clientID){
+    if(active[clientID].clientId == -1)
+        return false;
+    return true;                      
+}
+
 void *superUser(void *arg){
-        int superUserWrite[2], s_id, ret;
-        createPipe(superUserWrite);
-        checkError(s_id = fork());
-        if (isChildProcess(s_id)){
+        int superUserWrite[2], superUserId;
+        createPipe(superUserWrite, 1); // pipe between connection process and super user
+        
+        checkError(superUserId = fork());
+        if (childProcess(superUserId)){
             close(superUserWrite[0]);
-            while(true){
-                printInstructions();
-                char instr[LISTSIZE]={};
-                checkError(ret = read(STDIN_FILENO, instr, LISTSIZE)); 
-                checkError(write(superUserWrite[1], instr,strlen(instr)));
-                sleep(1);
-            }
+            takeSuperUserInput(superUserWrite[1]);
         }
         else{
             close(superUserWrite[1]);
-            char instr[LISTSIZE]={};
+            char instr[LIST_SIZE]={};
             while(true){
-                checkError(ret = read(superUserWrite[0], instr, LISTSIZE)); 
+                
+                int ret;
+                checkError(ret = read(superUserWrite[0], instr, LIST_SIZE)); 
+
                 char * tok = tokenizer(instr);
                 string command;
                 command.assign(tok);
 
-                if (instructionIsToDisplayList(command)){
+                if (DisplayListInstruction(command)){
                     tok = strtok(NULL, " \n");
-                    string command = (string) tok;
+                    command.assign(tok);
+
+                    //printing process lists from every client handler on server
                     if(command.compare("all") == 0){
                         int count = 0;
-                        while(active[count].clientId != -1){ 
-                            int n = active[count].list.length();
-                            char char_array[n + 1],  id [sizeof(int)];
-                            strcpy(char_array, active[count].list.c_str());
-                            sprintf(id, "%d", active[count].clientId);
-                            printListOnServer(id, char_array);
+                        while(active[count].clientId != -1){
+                            changeListFormat(count);
                             count++;
                         }
+                        
                     }
+
+                    //printing process lists from specific client handler on server
                     else{
                         int clientID;
                         bool correctInput = true;
+
                         if (command.compare("0") == 0){
+                            /*if we checked a client id of 0 with atoi, it will return 0. So to 
+                              differentiate from error, used this if condition.*/
                             clientID = 0;
                         }
                         else{
                             clientID = atoi(tok);
-                            if(clientID == 0){
+                            if(clientID <= 0){
                                 perror("Error in atoi");
                                 correctInput = false;
                             }
                         }
 
-                        if(active[clientID].clientId == -1){
-                            correctInput = false;
-                        }
-
+                        correctInput = checkIfClientExists(clientID);
                         if(correctInput){
-                            int count = 0;
-                            while(count != clientID){
-                                count++;
-                            }
-                            int n = active[count].list.length();
-                            char char_array[n + 1], id [sizeof(int)];
-                            sprintf(id, "%d", active[count].clientId);
-                            strcpy(char_array, active[count].list.c_str());
-                            printListOnServer(id, char_array);
+                            changeListFormat(clientID);
                             correctInput = false;
                         }
                         else{
@@ -731,7 +680,8 @@ void *superUser(void *arg){
                         }
                     }    
                 }
-                else if (instructionIsToPrintOnClient(command)){
+
+                else if (printOnClientInstruction(command)){
                     int clientId, index, n;
                     bool correctInput = true;
                     tok = strtok(NULL, " \n");
@@ -819,7 +769,6 @@ void *superUser(void *arg){
 
 int main(void){
     signal(SIGCHLD, handler);
-    createPipe(clientHandlerRead);
     initializeActiveList();
 
     pthread_t superUserThread, clientHandlerThread;
@@ -863,8 +812,6 @@ int main(void){
 		msgsock = accept(sock, 0, 0);
 		if (msgsock == -1)
 			perror("accept");
-
-        
 		
         pthread_create(&clientHandlerThread, NULL, clientHandler,(void*)&msgsock);
         pthread_detach(clientHandlerThread);
