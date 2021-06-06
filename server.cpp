@@ -1,7 +1,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <iostream>
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
@@ -15,6 +14,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <cctype>
+#include <iostream>
 using namespace std;
 
 #define LIST_SIZE 20
@@ -108,7 +108,7 @@ bool killInstruction(string instruction){
 }
 
 bool DisplayListInstruction(string instruction){
-    if(instruction == "listall" || instruction == "list")
+    if(instruction == "list")
         return true;
     return false;
 }
@@ -384,6 +384,9 @@ void *clientHandler(void * arg){
             char recievedCommand [BUFF_SIZE] = {};     
             string instruction;
             checkError(ret = read(msgsock, recievedCommand, BUFF_SIZE), SOCKET_ERROR_MESSAGE);
+            
+
+
             char* instructionTokens = tokenizer(recievedCommand);
             instruction.assign(instructionTokens);
             
@@ -535,6 +538,12 @@ void *clientHandler(void * arg){
             }
 
             else if (exitInstruction(instruction)){
+                int j = 0;
+                while(processList[j].processId != -1){
+                    kill(processList[j].processId, SIGTERM);
+                    j++;
+                }
+                
                 exit(EXIT_SUCCESS);
             }
 
@@ -640,7 +649,7 @@ void takeSuperUserInput(int pipe){
         printInstructions();
         char instr[LIST_SIZE]={};
         checkError(ret = read(STDIN_FILENO, instr, LIST_SIZE), READ_ERROR_MESSAGE); 
-        checkError(ret1 = write(pipe, instr,strlen(instr)), PIPE_ERROR_MESSAGE);
+        checkError(ret1 = write(pipe, instr,strlen(instr)), PIPE_ERROR_MESSAGE); 
         sleep(1);
     }
 }
@@ -811,7 +820,7 @@ int main(void){
 	/* Name socket using wildcards */
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = /*0;*/ htons(10000);
+	server.sin_port = htons(10000);
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server))) {
 		perror("binding stream socket");
 		exit(1);
